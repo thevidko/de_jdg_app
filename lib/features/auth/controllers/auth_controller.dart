@@ -1,0 +1,96 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/storage_service.dart';
+import '../../../core/models/user.dart'; // Import nového modelu
+
+// Provider pro AuthController
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
+  (ref) {
+    final storage = ref.watch(storageServiceProvider);
+    return AuthController(storage);
+  },
+);
+
+// 1. Rozšíříme AuthState o Usera
+class AuthState {
+  final bool isLoading;
+  final bool isAuthenticated;
+  final String? error;
+  final User? user; // <--- Přidáno
+
+  AuthState({
+    this.isLoading = false,
+    this.isAuthenticated = false,
+    this.error,
+    this.user,
+  });
+}
+
+class AuthController extends StateNotifier<AuthState> {
+  final StorageService _storage;
+  // ApiService voláme jako singleton pro jednoduchost
+  final _api = ApiService();
+
+  AuthController(this._storage) : super(AuthState()) {
+    checkAuthStatus();
+  }
+
+  Future<void> checkAuthStatus() async {
+    state = AuthState(isLoading: true);
+    final token = await _storage.getToken();
+
+    if (token != null) {
+      // Pokud máme token, zkusíme načíst i user data z cache (SharedPreferences)
+      final cachedUser = _storage.getUser();
+      state = AuthState(
+        isAuthenticated: true,
+        isLoading: false,
+        user: cachedUser,
+      );
+    } else {
+      state = AuthState(isAuthenticated: false, isLoading: false);
+    }
+  }
+
+  Future<void> login(String email, String password) async {
+    state = AuthState(isLoading: true);
+    try {
+      // 1. Získání dat z API
+      final attributes = await _api.login(email, password);
+
+      // attributes obsahuje to JSON pole, co jsi poslal
+      final accessToken = attributes['access_token'];
+      // final refreshToken = attributes['expires_in']; // Refresh token je nyní v HttpOnly Cookie
+
+      final wsToken = attributes['ws_connection_token'];
+      final userId = attributes['id'];
+      final name = attributes['name'];
+      final surname = attributes['surname'];
+
+      // 2. Uložení do Storage
+      if (accessToken != null) await _storage.setToken(accessToken);
+      if (wsToken != null) await _storage.setWsToken(wsToken);
+
+      // Uložení profilu
+      await _storage.saveUserProfile(userId, name, surname);
+
+      // 3. Vytvoření User objektu pro State
+      final user = User(id: userId, name: name, surname: surname);
+
+      // 4. Update stavu
+      state = AuthState(isAuthenticated: true, isLoading: false, user: user);
+    } catch (e) {
+      state = AuthState(
+        isAuthenticated: false,
+        isLoading: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  Future<void> logout() async {
+    await _api.logout(); // Vymaže cookies a tokeny v API service
+    await _storage.clearAll(); // Vymaže tokeny i profil v StorageService
+    state = AuthState(isAuthenticated: false);
+  }
+}

@@ -1,0 +1,187 @@
+import 'dart:io';
+import 'package:de_jdg_app/core/models/competition.dart';
+import 'package:dio/dio.dart';
+import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:cookie_jar/cookie_jar.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
+
+class ApiService {
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+
+  late final Dio _dio;
+  final _storage = const FlutterSecureStorage();
+  late final PersistCookieJar _cookieJar;
+
+  // Zjisti správnou URL (pro tablet s ADB Reverse nebo emulátor)
+  final String _baseUrl = 'http://localhost:8000/api/v1';
+
+  ApiService._internal();
+
+  // Tuto metodu musíme zavolat v main.dart před spuštěním aplikace!
+  Future<void> init() async {
+    // 1. Nastavení cesty pro ukládání cookies
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final cookiePath = "${appDocDir.path}/.cookies/";
+
+    // Vytvoření složky, pokud neexistuje
+    await Directory(cookiePath).create(recursive: true);
+
+    _cookieJar = PersistCookieJar(storage: FileStorage(cookiePath));
+
+    // 2. Nastavení Dio
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: _baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {
+          'Content-Type': 'application/vnd.api+json',
+          'Accept': 'application/vnd.api+json',
+        },
+      ),
+    );
+
+    // 3. Přidání Cookie Manageru (Jako první interceptor!)
+    _dio.interceptors.add(CookieManager(_cookieJar));
+
+    _setupInterceptors();
+  }
+
+  Dio get client => _dio;
+
+  void _setupInterceptors() {
+    _dio.interceptors.add(
+      QueuedInterceptorsWrapper(
+        onRequest: (options, handler) async {
+          // Access token stále posíláme ručně v Headeru (pokud ho máme)
+          final token = await _storage.read(key: 'jwt_token');
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          return handler.next(options);
+        },
+
+        onError: (DioException e, handler) async {
+          if (e.response?.statusCode == 401) {
+            // Pokud chyba nastala při pokusu o refresh, konec.
+            if (e.requestOptions.path.contains('/auth/refresh')) {
+              await logout();
+              return handler.next(e);
+            }
+
+            // Pokus o refresh
+            final refreshed = await _refreshToken();
+            if (refreshed) {
+              // Opakování requestu (stejně jako předtím)
+              final newToken = await _storage.read(key: 'jwt_token');
+              e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+
+              final opts = Options(
+                method: e.requestOptions.method,
+                headers: e.requestOptions.headers,
+              );
+              final cloneReq = await _dio.request(
+                e.requestOptions.path,
+                options: opts,
+                data: e.requestOptions.data,
+                queryParameters: e.requestOptions.queryParameters,
+              );
+              return handler.resolve(cloneReq);
+            }
+          }
+          return handler.next(e);
+        },
+      ),
+    );
+  }
+
+  Future<bool> _refreshToken() async {
+    try {
+      print("🔄 Refreshing token via Cookie...");
+
+      // DŮLEŽITÉ: Tady už neposíláme {refresh_token: ...} v body.
+      // CookieManager automaticky vezme HttpOnly cookie z uložiště
+      // a přilepí ji k tomuto requestu.
+
+      // Vytvoříme novou instanci Dio jen pro refresh,
+      // ale MUSÍME jí dát stejný CookieJar, aby měla přístup k té cookie!
+      final refreshDio = Dio(BaseOptions(baseUrl: _baseUrl));
+      refreshDio.interceptors.add(
+        CookieManager(_cookieJar),
+      ); // <--- Sdílený jar
+
+      final response = await refreshDio.post('/auth/refresh');
+
+      if (response.statusCode == 200) {
+        // Backend pošle nový Access Token v JSONu
+        final newAccessToken =
+            response.data['access_token']; // uprav dle tvé API
+
+        // A backend pošle i nový Refresh Token v Set-Cookie headeru.
+        // CookieManager ho automaticky chytí a uloží do _cookieJar.
+
+        await _storage.write(key: 'jwt_token', value: newAccessToken);
+        return true;
+      }
+    } catch (e) {
+      print("❌ Refresh failed: $e");
+    }
+    return false;
+  }
+
+  // ... uvnitř ApiService class
+
+  Future<List<Competition>> getMyCompetitions() async {
+    print("🚀 API: Getting my competitions...");
+    try {
+      final response = await _dio.get(
+        '/competitions',
+        queryParameters: {
+          'filter[my_judgements]': 'true',
+          'sort': '-dateStart',
+        },
+      );
+      print("✅ API: Response received: ${response.statusCode}");
+      // print("📦 Data: ${response.data}"); // Okomentováno pro přehlednost
+
+      final List<dynamic> data = response.data['data'];
+      print("📊 Parsing ${data.length} competitions");
+
+      return data.map((json) => Competition.fromJson(json)).toList();
+    } on DioException catch (e) {
+      print("❌ API Error in getMyCompetitions: ${e.message}");
+      if (e.response != null) {
+        print("📥 Response Status: ${e.response?.statusCode}");
+        print("📥 Response Data: ${e.response?.data}");
+        print("📤 Request Headers: ${e.requestOptions.headers}");
+      }
+      rethrow;
+    } catch (e) {
+      print("❌ Unknown Error: $e");
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    // 1. Zavoláme login
+    final response = await _dio.post(
+      '/auth/login',
+      data: {'email': email, 'password': password},
+      options: Options(extra: {'skipAuth': true}),
+    );
+
+    // CookieManager automaticky zachytí 'Set-Cookie' s refresh tokenem
+    // a uloží ho do telefonu. My se o to nestaráme.
+
+    return response.data['data']['attributes'];
+  }
+
+  Future<void> logout() async {
+    // Smazat Access Token
+    await _storage.deleteAll();
+    // Smazat Cookies (Refresh Token)
+    await _cookieJar.deleteAll();
+  }
+}
