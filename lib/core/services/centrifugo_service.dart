@@ -7,7 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_service.dart';
 
 class CentrifugoService {
-  late Client _client;
+  Client? _client;
   StreamSubscription<ConnectedEvent>? _connectSub;
   StreamSubscription<DisconnectedEvent>? _disconnectSub;
 
@@ -49,6 +49,9 @@ class CentrifugoService {
           utf8.decode(base64.decode(base64.normalize(parts[1]))),
         );
         print("🕵️ WS Token Payload: $payload");
+        if (payload['sub'] != null) {
+          print("🆔 Token Subject (User UUID): ${payload['sub']}");
+        }
         // Check expiration
         if (payload['exp'] != null) {
           final exp = DateTime.fromMillisecondsSinceEpoch(
@@ -65,34 +68,19 @@ class CentrifugoService {
       print("⚠️ Failed to parse WS Token: $e");
     }
 
-    // Pokud už existuje klient, zkusíme ho jen připojit, nebo ho vytvoříme znovu?
-    // Pro jednoduchost vytvoříme nový, ale nejprve uklidíme starý.
-    try {
-      // ignore: unnecessary_null_comparison
-      if (_client != null) {
-        // _client je late, takže přístup k němu před inicializací by hodil chybu.
-        // Ale v Dartu nemáme snadno check 'isInitialized'.
-        // Takže spoléháme na to, že toto volání connect() může být první.
-        // Zjednodušení: Vždy vytvoříme nový klient.
-        _connectSub?.cancel();
-        _disconnectSub?.cancel();
-        try {
-          _client.disconnect();
-        } catch (_) {}
-      }
-    } catch (_) {
-      // Ignorujeme LateInitializationError
-    }
+    // Vždy čisté odpojení před novým připojením
+    await disconnect();
 
+    print("🔄 Vytvářím nový Centrifugo Client...");
     _client = createClient(_wsUrl, ClientConfig(token: wsToken));
 
-    _connectSub = _client.connected.listen((event) {
+    _connectSub = _client?.connected.listen((event) {
       final msg = "✅ Centrifugo: Připojeno (Client ID: ${event.client})";
       print(msg);
       _updateStatus(msg);
     });
 
-    _disconnectSub = _client.disconnected.listen((event) {
+    _disconnectSub = _client?.disconnected.listen((event) {
       final msg = "❌ Centrifugo: Odpojeno (${event.reason})";
       print(msg);
       _updateStatus(msg);
@@ -100,7 +88,7 @@ class CentrifugoService {
 
     try {
       _updateStatus("⏳ Připojuji se k Centrifugu ($_wsUrl)...");
-      await _client.connect();
+      await _client?.connect();
     } catch (e) {
       final msg = "🔥 Centrifugo Error: $e";
       print(msg);
@@ -111,6 +99,11 @@ class CentrifugoService {
   /// 2. Odběr kanálu (Vstup do místnosti)
   /// Automaticky vyřeší auth pro privátní kanály (judges:...)
   Future<Subscription?> subscribe(String channel) async {
+    if (_client == null) {
+      _updateStatus("⚠️ Nemohu odebírat $channel - klient není připojen.");
+      return null;
+    }
+
     String? subToken;
 
     // Pokud je kanál privátní (začíná na "judges:"), musíme získat token z API
@@ -125,7 +118,7 @@ class CentrifugoService {
     }
 
     // Vytvoření odběru
-    final subscription = _client.newSubscription(
+    final subscription = _client!.newSubscription(
       channel,
       SubscriptionConfig(
         token: subToken ?? '', // Zde vložíme token získaný z API
@@ -178,15 +171,28 @@ class CentrifugoService {
       // Backend vrací { token: "..." } nebo { data: { token: "..." } } - zkontroluj dle Laravel response
       // Laravel default broadcast auth vrací přímo JSON s klíčem 'auth' nebo 'token'.
       return response.data['token'];
+    } on DioException catch (e) {
+      print("❌ Auth Request Failed: ${e.message}");
+      if (e.response != null) {
+        print("📥 Status: ${e.response?.statusCode}");
+        print("📥 Headers: ${e.response?.headers}");
+        print("📥 Data: ${e.response?.data}");
+      }
+      rethrow;
     } catch (e) {
       print("❌ Auth Request Failed: $e");
       rethrow;
     }
   }
 
-  void disconnect() {
-    _client.disconnect();
+  Future<void> disconnect() async {
     _connectSub?.cancel();
     _disconnectSub?.cancel();
+    if (_client != null) {
+      try {
+        _client!.disconnect();
+      } catch (_) {}
+      _client = null;
+    }
   }
 }

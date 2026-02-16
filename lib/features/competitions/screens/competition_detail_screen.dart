@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:centrifuge/centrifuge.dart';
+import '../../auth/controllers/auth_controller.dart';
 import '../../realtime/providers/centrifugo_providers.dart';
 
 class CompetitionDetailScreen extends ConsumerStatefulWidget {
@@ -29,9 +30,18 @@ class _CompetitionDetailScreenState
 
   Future<void> _setupRealtime() async {
     final centrifugo = ref.read(centrifugoServiceProvider);
+    final user = ref.read(authControllerProvider).user;
 
-    // Název kanálu dle tvé tabulky
-    final channelName = 'judges:${widget.competitionId}';
+    if (user == null) {
+      _addLog(
+        "❌ Uživatel není přihlášen, nemohu se připojit k Centrifugo kanálu.",
+      );
+      return;
+    }
+
+    // Název kanálu dle User ID (logy backendu potvrzují: "Publishing to channel judges:USER_UUID")
+    // POZOR: Backend musí mít upravený routes/channels.php, aby akceptoval User UUID místo Competition UUID!
+    final channelName = 'judges:${user.id}';
 
     // Subscribe (uvnitř se automaticky zavolá API pro token)
     _subscription = await centrifugo.subscribe(channelName);
