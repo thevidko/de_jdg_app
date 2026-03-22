@@ -1,5 +1,8 @@
 import 'dart:io';
+import 'package:de_jdg_app/core/models/active_state.dart';
 import 'package:de_jdg_app/core/models/competition.dart';
+import 'package:de_jdg_app/core/models/round.dart';
+import 'package:de_jdg_app/core/services/score_queue_service.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:cookie_jar/cookie_jar.dart';
@@ -101,28 +104,55 @@ class ApiService {
     try {
       print("🔄 Refreshing token via Cookie...");
 
-      // DŮLEŽITÉ: Tady už neposíláme {refresh_token: ...} v body.
-      // CookieManager automaticky vezme HttpOnly cookie z uložiště
-      // a přilepí ji k tomuto requestu.
-
-      // Vytvoříme novou instanci Dio jen pro refresh,
-      // ale MUSÍME jí dát stejný CookieJar, aby měla přístup k té cookie!
-      final refreshDio = Dio(BaseOptions(baseUrl: _baseUrl));
-      refreshDio.interceptors.add(
-        CookieManager(_cookieJar),
-      ); // <--- Sdílený jar
+      // Separátní Dio instance se sdíleným CookieJar – CookieManager automaticky
+      // přiloží HttpOnly refresh_token cookie k požadavku.
+      final refreshDio = Dio(
+        BaseOptions(
+          baseUrl: _baseUrl,
+          headers: {
+            'Content-Type': 'application/vnd.api+json',
+            'Accept': 'application/vnd.api+json',
+          },
+        ),
+      );
+      refreshDio.interceptors.add(CookieManager(_cookieJar));
 
       final response = await refreshDio.post('/auth/refresh');
+      print("🔄 Refresh response status: ${response.statusCode}");
+      print("🔄 Refresh response data: ${response.data}");
 
       if (response.statusCode == 200) {
-        // Backend pošle nový Access Token v JSONu
-        final newAccessToken =
-            response.data['access_token']; // uprav dle tvé API
+        // Backend může vracet buď:
+        //   (A) JSON:API: { data: { attributes: { access_token: "...", ws_connection_token: "..." } } }
+        //   (B) Jednoduchý JSON: { access_token: "..." }
+        String? newAccessToken;
+        String? newWsToken;
 
-        // A backend pošle i nový Refresh Token v Set-Cookie headeru.
-        // CookieManager ho automaticky chytí a uloží do _cookieJar.
+        final data = response.data;
+        if (data is Map) {
+          if (data['data'] is Map && data['data']['attributes'] is Map) {
+            // Varianta A – JSON:API (stejný formát jako /auth/login)
+            final attrs = data['data']['attributes'] as Map;
+            newAccessToken = attrs['access_token']?.toString();
+            newWsToken = attrs['ws_connection_token']?.toString();
+          } else {
+            // Varianta B – jednoduchý JSON
+            newAccessToken = data['access_token']?.toString();
+            newWsToken = data['ws_connection_token']?.toString();
+          }
+        }
+
+        if (newAccessToken == null || newAccessToken.isEmpty) {
+          print("❌ Refresh: access_token nebyl nalezen v odpovědi");
+          return false;
+        }
 
         await _storage.write(key: 'jwt_token', value: newAccessToken);
+        if (newWsToken != null && newWsToken.isNotEmpty) {
+          await _storage.write(key: 'ws_token', value: newWsToken);
+        }
+
+        print("✅ Token obnoven");
         return true;
       }
     } catch (e) {
@@ -183,5 +213,42 @@ class ApiService {
     await _storage.deleteAll();
     // Smazat Cookies (Refresh Token)
     await _cookieJar.deleteAll();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Judging API metody
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Načte detail kola – disciplínu a seznam párů (startovní čísla).
+  ///
+  /// Volá se po přijetí START_ROUND Centrifugo eventu.
+  /// Záměrně načítáme jen co potřebujeme: název kola, disciplínu, páry.
+  Future<RoundDetail> getRound(String roundUuid) async {
+    final response = await _dio.get(
+      '/rounds/$roundUuid',
+      queryParameters: {
+        'include': 'discipline,discipline.disciplinePairs',
+      },
+    );
+    return RoundDetail.fromJsonApi(response.data as Map<String, dynamic>);
+  }
+
+  /// Načte aktivní stav disciplíny z Redis cache.
+  ///
+  /// Volá se po přijetí START_DANCE eventu (action: PULL_ACTIVE_STATE)
+  /// nebo při opětovném připojení (reconnect).
+  Future<ActiveState> getActiveState(String disciplineUuid) async {
+    final response = await _dio.get('/disciplines/$disciplineUuid/active-state');
+    return ActiveState.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// Odešle hromadné hodnocení párů na server.
+  ///
+  /// Endpoint je idempotentní (upsert) – bezpečné volat opakovaně.
+  /// Porotce je identifikován z JWT tokenu na backendu.
+  ///
+  /// Throws [DioException] při síťové chybě – volající pak uloží do offline fronty.
+  Future<void> submitScores(ScorePayload payload) async {
+    await _dio.post('/scores/bulk', data: payload.toJson());
   }
 }

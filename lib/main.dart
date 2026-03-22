@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/router/app_router.dart';
 import 'core/services/storage_service.dart';
+import 'core/services/score_queue_service.dart';
 import 'core/services/api_service.dart';
 import 'features/realtime/providers/centrifugo_providers.dart'; // <--- Import provideru
 
@@ -19,8 +20,9 @@ void main() async {
     // 2. ProviderScope obaluje celou aplikaci (jako Pinia root)
     ProviderScope(
       overrides: [
-        // 3. Injectneme vytvořenou instanci prefs do našeho provideru
+        // 3. Injectneme vytvořené instance do providerů
         storageServiceProvider.overrideWithValue(StorageService(prefs)),
+        scoreQueueServiceProvider.overrideWithValue(ScoreQueueService(prefs)),
       ],
       child: const MyApp(),
     ),
