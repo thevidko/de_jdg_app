@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-
 import '../../../core/models/round.dart';
+import '../../../core/theme/app_colors.dart';
 
 /// Zobrazí se při fázi [JudgingPhase.roundStarted].
 ///
-/// Ukazuje základní info o kole (název, disciplína, styl hodnocení)
-/// a seznam párů. Hodnocení je zamčené – čekáme na START_DANCE event.
+/// Ukazuje základní info o kole a seznam párů. Hodnocení je zamčené.
 class RoundStartedView extends StatelessWidget {
   final RoundDetail round;
 
@@ -16,105 +15,121 @@ class RoundStartedView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Info o kole
-        _RoundInfoCard(round: round),
+        // Info o kole - Clean modern header
+        _RoundHeader(round: round),
 
-        // Informační banner – čekáme na tanec
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Row(
-            children: [
-              Icon(Icons.lock_outline, color: Colors.orange.shade600, size: 16),
-              const SizedBox(width: 6),
-              Text(
-                'Čekáme na spuštění tance...',
-                style: TextStyle(color: Colors.orange.shade700, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-
-        const Divider(height: 1),
-
-        // Počet párů
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Text(
-            '${round.pairs.length} párů',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[500],
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-        ),
-
-        // Seznam párů (jen startovní čísla – jména nejsou v API odpovědi)
+        // Seznam párů (zobrazen ve stejné mřížce jako hlasování)
         Expanded(
           child: round.pairs.isEmpty
-              ? Center(
+              ? const Center(
                   child: Text(
-                    'Žádné páry nenačteny.',
-                    style: TextStyle(color: Colors.grey[500]),
+                    'Žádné páry k zobrazení.',
+                    style: TextStyle(color: AppColors.onSurfaceVariant),
                   ),
                 )
-              : _PairsGrid(pairs: round.pairs),
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.9,
+                  ),
+                  itemCount: round.pairs.length,
+                  itemBuilder: (context, index) {
+                    final pair = round.pairs[index];
+                    return _WaitingGridCard(pair: pair);
+                  },
+                ),
         ),
       ],
     );
   }
 }
 
-/// Karta s informacemi o kole.
-class _RoundInfoCard extends StatelessWidget {
+class _RoundHeader extends StatelessWidget {
   final RoundDetail round;
 
-  const _RoundInfoCard({required this.round});
+  const _RoundHeader({required this.round});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Theme.of(context).primaryColor.withValues(alpha: 0.06),
-      width: double.infinity,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Název kola
-          Text(
-            round.name,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 4),
-
-          // Název disciplíny
-          if (round.disciplineName.isNotEmpty)
-            Text(
-              round.disciplineName,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Colors.grey[600]),
-            ),
-
-          const SizedBox(height: 10),
-
-          // Tagy: typ hodnocení + počet párů
           Row(
             children: [
-              _Tag(
-                label: round.evaluationSystemLabel,
-                color: round.isFinale ? Colors.amber : Colors.blue,
-                icon: round.isFinale ? Icons.format_list_numbered : Icons.close,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDC8FF),
+                  borderRadius: BorderRadius.circular(6), 
+                ),
+                child: const Text(
+                  "PŘÍPRAVA", 
+                  style: TextStyle(
+                    color: Color(0xFF572BA0), 
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10,
+                    fontFamily: 'Inter',
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
-              _Tag(
-                label: '${round.pairs.length} párů',
-                color: Colors.grey,
-                icon: Icons.people_outline,
-              ),
+              if (round.disciplineName.isNotEmpty)
+                Text(
+                  round.disciplineName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Plus Jakarta Sans',
+                    color: AppColors.onSurface,
+                    letterSpacing: -0.5,
+                  ),
+                )
+              else
+                Text(
+                  round.name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Plus Jakarta Sans',
+                    color: AppColors.onSurface,
+                    letterSpacing: -0.5,
+                  ),
+                ),
             ],
+          ),
+          
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.outlineVariant.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.people_alt_rounded,
+                  color: AppColors.onSurfaceVariant,
+                  size: 14,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${round.pairs.length}',
+                  style: const TextStyle(
+                    color: AppColors.onSurfaceVariant, 
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -122,77 +137,50 @@ class _RoundInfoCard extends StatelessWidget {
   }
 }
 
-/// Barevný tag s ikonou.
-class _Tag extends StatelessWidget {
-  final String label;
-  final Color color;
-  final IconData icon;
+/// Zamčená mřížková karta představující přípravnou fázi pro pár
+class _WaitingGridCard extends StatelessWidget {
+  final DisciplinePair pair;
 
-  const _Tag({required this.label, required this.color, required this.icon});
+  const _WaitingGridCard({required this.pair});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: AppColors.surfaceContainerLowest, // bílá karta
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.onSurface.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+        border: Border.all(
+          color: AppColors.outline.withOpacity(0.1),
+          width: 1,
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 13, color: color.withValues(alpha: 0.9)),
-          const SizedBox(width: 4),
           Text(
-            label,
-            style: TextStyle(
-              color: color.withValues(alpha: 0.9),
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
+            pair.bibNumberStr,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Plus Jakarta Sans',
+              color: AppColors.onSurface,
             ),
+          ),
+          const SizedBox(height: 8),
+          const Icon(
+            Icons.lock_outline,
+            color: AppColors.outlineVariant,
+            size: 24,
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Grid startovních čísel – přehledné zobrazení všech párů v kole.
-class _PairsGrid extends StatelessWidget {
-  final List<DisciplinePair> pairs;
-
-  const _PairsGrid({required this.pairs});
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 1.2,
-      ),
-      itemCount: pairs.length,
-      itemBuilder: (context, index) {
-        final pair = pairs[index];
-        return Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Text(
-            pair.bibNumberStr,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-          ),
-        );
-      },
     );
   }
 }

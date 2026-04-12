@@ -5,6 +5,7 @@ import 'core/router/app_router.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/score_queue_service.dart';
 import 'core/services/api_service.dart';
+import 'core/theme/app_theme.dart';
 import 'features/realtime/providers/centrifugo_providers.dart'; // <--- Import provideru
 
 void main() async {
@@ -41,11 +42,9 @@ class MyApp extends ConsumerWidget {
     ref.watch(realtimeControllerProvider);
 
     return MaterialApp.router(
-      title: 'Moje Flutter App',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
+      debugShowCheckedModeBanner: false,
+      title: 'DanceEval Judge',
+      theme: AppTheme.lightTheme,
       // 6. Napojení GoRouteru
       routerConfig: router,
     );

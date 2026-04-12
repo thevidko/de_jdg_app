@@ -6,6 +6,7 @@ import '../../judging/widgets/debug_panel.dart';
 import '../../judging/widgets/idle_view.dart';
 import '../../judging/widgets/round_started_view.dart';
 import '../../judging/widgets/scoring_view.dart';
+import '../../judging/widgets/round_ended_view.dart';
 
 /// Hlavní obrazovka hodnocení.
 ///
@@ -60,11 +61,20 @@ class CompetitionDetailScreen extends ConsumerWidget {
 
   /// Vrátí titulek AppBaru podle aktuální fáze.
   Widget _appBarTitle(JudgingState state) {
+    String getDisciplineAndRound() {
+      final round = state.round;
+      if (round == null) return 'Hodnocení';
+      final parts = <String>[];
+      if (round.disciplineName.isNotEmpty) parts.add(round.disciplineName);
+      if (round.name.isNotEmpty) parts.add(round.name);
+      return parts.isNotEmpty ? parts.join(' • ') : 'Hodnocení';
+    }
+
     return switch (state.phase) {
       JudgingPhase.idle => const Text('Čekáme na kolo'),
-      JudgingPhase.loading => Row(
+      JudgingPhase.loading => const Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
+          children: [
             SizedBox(
               width: 16,
               height: 16,
@@ -74,10 +84,8 @@ class CompetitionDetailScreen extends ConsumerWidget {
             Text('Načítám...'),
           ],
         ),
-      JudgingPhase.roundStarted => Text(state.round?.name ?? 'Kolo'),
-      JudgingPhase.danceActive => Text(
-          state.activeState?.currentDance?.name ?? 'Hodnocení',
-        ),
+      JudgingPhase.roundStarted => Text(getDisciplineAndRound()),
+      JudgingPhase.danceActive => Text(getDisciplineAndRound()),
       JudgingPhase.roundEnded => const Text('Kolo ukončeno'),
     };
   }
@@ -122,7 +130,7 @@ class CompetitionDetailScreen extends ConsumerWidget {
         );
 
       case JudgingPhase.roundEnded:
-        return const IdleView(isAfterRound: true);
+        return const RoundEndedView();
     }
   }
 }

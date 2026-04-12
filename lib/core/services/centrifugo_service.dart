@@ -127,7 +127,6 @@ class CentrifugoService {
     final existing = _subscriptions[channel];
     if (existing != null) {
       try {
-        existing.unsubscribe();
         _client!.removeSubscription(existing);
       } catch (_) {}
       _subscriptions.remove(channel);
@@ -210,7 +209,6 @@ class CentrifugoService {
     final sub = _subscriptions.remove(channel);
     if (sub == null || _client == null) return;
     try {
-      sub.unsubscribe();
       _client!.removeSubscription(sub);
     } catch (_) {}
   }
@@ -222,7 +220,6 @@ class CentrifugoService {
       // Odebereme všechny subscripce z registru před odpojením
       for (final sub in _subscriptions.values) {
         try {
-          sub.unsubscribe();
           _client!.removeSubscription(sub);
         } catch (_) {}
       }
