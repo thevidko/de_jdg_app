@@ -57,19 +57,22 @@ class StorageService {
   }
 
   // --- Aktivní sezení porotce (pro obnovu stavu po restartu) ---
+  // Klíče jsou scopované na competitionId, aby více soutěží nesdílelo stejná data.
 
   /// Uloží UUID aktivního kola a disciplíny – volá se po úspěšném START_ROUND.
-  Future<void> saveActiveSession(String roundUuid, String disciplineUuid) async {
-    await _prefs.setString('active_round_uuid', roundUuid);
-    await _prefs.setString('active_discipline_uuid', disciplineUuid);
+  Future<void> saveActiveSession(String roundUuid, String disciplineUuid, {required String competitionId}) async {
+    await _prefs.setString('active_round_uuid_$competitionId', roundUuid);
+    await _prefs.setString('active_discipline_uuid_$competitionId', disciplineUuid);
   }
 
-  String? getActiveRoundUuid() => _prefs.getString('active_round_uuid');
-  String? getActiveDisciplineUuid() => _prefs.getString('active_discipline_uuid');
+  String? getActiveRoundUuid({required String competitionId}) =>
+      _prefs.getString('active_round_uuid_$competitionId');
+  String? getActiveDisciplineUuid({required String competitionId}) =>
+      _prefs.getString('active_discipline_uuid_$competitionId');
 
   /// Smaže aktivní sezení – volá se po END_ROUND.
-  Future<void> clearActiveSession() async {
-    await _prefs.remove('active_round_uuid');
-    await _prefs.remove('active_discipline_uuid');
+  Future<void> clearActiveSession({required String competitionId}) async {
+    await _prefs.remove('active_round_uuid_$competitionId');
+    await _prefs.remove('active_discipline_uuid_$competitionId');
   }
 }

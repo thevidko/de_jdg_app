@@ -208,7 +208,7 @@ class JudgingController extends StateNotifier<JudgingState> {
   /// Cesta 2 – žádné uložené sezení (první připojení do rozjetého kola): zavolá
   ///   competition active-state endpoint, který prohledá disciplíny soutěže.
   Future<void> _tryRestoreState() async {
-    final storedRoundUuid = _storage.getActiveRoundUuid();
+    final storedRoundUuid = _storage.getActiveRoundUuid(competitionId: _competitionId);
     if (storedRoundUuid != null && storedRoundUuid.isNotEmpty) {
       await _restoreFromStoredSession(storedRoundUuid);
     } else if (_competitionId.isNotEmpty) {
@@ -222,7 +222,7 @@ class JudgingController extends StateNotifier<JudgingState> {
     state = state.copyWith(phase: JudgingPhase.loading, error: null);
     try {
       final round = await _api.getRound(roundUuid);
-      final storedDisciplineUuid = _storage.getActiveDisciplineUuid();
+      final storedDisciplineUuid = _storage.getActiveDisciplineUuid(competitionId: _competitionId);
       final disciplineUuid = (storedDisciplineUuid != null && storedDisciplineUuid.isNotEmpty)
           ? storedDisciplineUuid
           : round.disciplineUuid;
@@ -252,7 +252,7 @@ class JudgingController extends StateNotifier<JudgingState> {
         return;
       }
       final round = await _api.getRound(roundUuid);
-      await _storage.saveActiveSession(roundUuid, round.disciplineUuid);
+      await _storage.saveActiveSession(roundUuid, round.disciplineUuid, competitionId: _competitionId);
       _applyRestoredState(round, activeState);
     } catch (e) {
       state = state.copyWith(phase: JudgingPhase.idle, error: null);
@@ -334,7 +334,7 @@ class JudgingController extends StateNotifier<JudgingState> {
         scoresLocked: false,
         error: null,
       );
-      await _storage.saveActiveSession(roundUuid, round.disciplineUuid);
+      await _storage.saveActiveSession(roundUuid, round.disciplineUuid, competitionId: _competitionId);
       _addDebugLog('✅ "${round.name}" načteno – ${round.pairs.length} párů'
           ' | ev.system: ${round.evaluationSystem}');
     } catch (e) {
@@ -368,18 +368,20 @@ class JudgingController extends StateNotifier<JudgingState> {
         return;
       }
 
+      final alreadyVoted = activeState.judgeHasVoted;
       state = state.copyWith(
         phase: JudgingPhase.danceActive,
         activeState: activeState,
         scores: {},
-        scoresSubmitted: false,
-        scoresLocked: false,
+        scoresSubmitted: alreadyVoted,
+        scoresLocked: alreadyVoted,
         error: null,
       );
       final dance = activeState.currentDance;
+      final votedSuffix = alreadyVoted ? ' (hodnocení již odesláno)' : '';
       _addDebugLog(
         '✅ Tanec: ${dance?.name ?? '?'} (${dance?.shortName ?? '?'})'
-        ' – ${activeState.allRoundPairs.length} párů',
+        ' – ${activeState.allRoundPairs.length} párů$votedSuffix',
       );
     } catch (e) {
       // Při chybě vrátíme do stavu kola (ne idle), aby páry zůstaly viditelné
@@ -398,7 +400,7 @@ class JudgingController extends StateNotifier<JudgingState> {
       submitScores();
     }
 
-    _storage.clearActiveSession();
+    _storage.clearActiveSession(competitionId: _competitionId);
     state = state.copyWith(phase: JudgingPhase.roundEnded);
   }
 
