@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/storage_service.dart';
-import '../../../core/models/user.dart'; // Import nového modelu
+import '../../../core/models/user.dart';
 
 // Provider pro AuthController
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
@@ -28,11 +30,22 @@ class AuthState {
 
 class AuthController extends StateNotifier<AuthState> {
   final StorageService _storage;
-  // ApiService voláme jako singleton pro jednoduchost
   final _api = ApiService();
+  late final StreamSubscription<void> _authFailureSub;
 
   AuthController(this._storage) : super(AuthState()) {
     checkAuthStatus();
+    // Naslouchá nenávratnému selhání refreshe (smazaný/expirovaný token na serveru).
+    // ApiService zavolá logout() (smaže tokeny) a emituje sem → přesměrujeme na login.
+    _authFailureSub = _api.authFailureStream.listen((_) {
+      if (mounted) state = AuthState(isAuthenticated: false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _authFailureSub.cancel();
+    super.dispose();
   }
 
   Future<void> checkAuthStatus() async {

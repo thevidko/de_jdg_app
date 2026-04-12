@@ -11,6 +11,9 @@ class CentrifugoService {
   StreamSubscription<ConnectedEvent>? _connectSub;
   StreamSubscription<DisconnectedEvent>? _disconnectSub;
 
+  // Sleduje aktivní subscripce dle názvu kanálu – umožňuje bezpečné opakované subscribe.
+  final Map<String, Subscription> _subscriptions = {};
+
   final ApiService _apiService;
   final _storage = const FlutterSecureStorage();
 
@@ -117,13 +120,27 @@ class CentrifugoService {
       }
     }
 
+    // Pokud subscripce pro tento kanál již existuje v registru klienta, odstraníme ji.
+    // Stává se po autoDispose JudgingControlleru – unsubscribe() nestačí, musíme ji z
+    // registru klienta odebrat pomocí removeSubscription(), jinak newSubscription() hodí
+    // "Subscription to a channel already exists".
+    final existing = _subscriptions[channel];
+    if (existing != null) {
+      try {
+        existing.unsubscribe();
+        _client!.removeSubscription(existing);
+      } catch (_) {}
+      _subscriptions.remove(channel);
+    }
+
     // Vytvoření odběru
     final subscription = _client!.newSubscription(
       channel,
       SubscriptionConfig(
-        token: subToken ?? '', // Zde vložíme token získaný z API
+        token: subToken ?? '',
       ),
     );
+    _subscriptions[channel] = subscription;
 
     // Nastavení listenerů - Listener pro data necháme na UI vrstvě (CompetitionDetailScreen),
     // abychom předešli chybě "Stream has already been listened to".
@@ -185,10 +202,31 @@ class CentrifugoService {
     }
   }
 
+  /// Odhlásí se z kanálu a odstraní subscripci z registru klienta.
+  ///
+  /// Volá se z [JudgingController.dispose()] – zajišťuje, že při příštím
+  /// otevření screeny je možné kanál znovu odebírat bez výjimky "already exists".
+  Future<void> removeChannel(String channel) async {
+    final sub = _subscriptions.remove(channel);
+    if (sub == null || _client == null) return;
+    try {
+      sub.unsubscribe();
+      _client!.removeSubscription(sub);
+    } catch (_) {}
+  }
+
   Future<void> disconnect() async {
     _connectSub?.cancel();
     _disconnectSub?.cancel();
     if (_client != null) {
+      // Odebereme všechny subscripce z registru před odpojením
+      for (final sub in _subscriptions.values) {
+        try {
+          sub.unsubscribe();
+          _client!.removeSubscription(sub);
+        } catch (_) {}
+      }
+      _subscriptions.clear();
       try {
         _client!.disconnect();
       } catch (_) {}

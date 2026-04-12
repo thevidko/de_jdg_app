@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:de_jdg_app/core/models/active_state.dart';
 import 'package:de_jdg_app/core/models/competition.dart';
@@ -16,6 +17,11 @@ class ApiService {
   late final Dio _dio;
   final _storage = const FlutterSecureStorage();
   late final PersistCookieJar _cookieJar;
+
+  /// Emituje při nenávratném selhání autentizace (refresh selhal nebo vrátil chybu).
+  /// AuthController naslouchá a přesměruje uživatele na přihlášení.
+  final _authFailureController = StreamController<void>.broadcast();
+  Stream<void> get authFailureStream => _authFailureController.stream;
 
   // Zjisti správnou URL (pro tablet s ADB Reverse nebo emulátor)
   final String _baseUrl = 'http://localhost:8000/api/v1';
@@ -68,16 +74,17 @@ class ApiService {
 
         onError: (DioException e, handler) async {
           if (e.response?.statusCode == 401) {
-            // Pokud chyba nastala při pokusu o refresh, konec.
+            // Refresh endpoint sám vrátil 401 → token je nenávratně neplatný.
             if (e.requestOptions.path.contains('/auth/refresh')) {
               await logout();
+              _authFailureController.add(null);
               return handler.next(e);
             }
 
             // Pokus o refresh
             final refreshed = await _refreshToken();
             if (refreshed) {
-              // Opakování requestu (stejně jako předtím)
+              // Opakování requestu s novým tokenem
               final newToken = await _storage.read(key: 'jwt_token');
               e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
 
@@ -93,6 +100,10 @@ class ApiService {
               );
               return handler.resolve(cloneReq);
             }
+
+            // Refresh selhal (server vrátil 5xx nebo jiná chyba) → odhlásit.
+            await logout();
+            _authFailureController.add(null);
           }
           return handler.next(e);
         },
@@ -239,6 +250,15 @@ class ApiService {
   /// nebo při opětovném připojení (reconnect).
   Future<ActiveState> getActiveState(String disciplineUuid) async {
     final response = await _dio.get('/disciplines/$disciplineUuid/active-state');
+    return ActiveState.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// Načte aktivní stav soutěže – projde disciplíny soutěže a vrátí první aktivní stav z cache.
+  ///
+  /// Formát odpovědi je identický s [getActiveState].
+  /// Volá se při připojení do rozjetého kola, kdy porotce nezná UUID disciplíny.
+  Future<ActiveState> getCompetitionActiveState(String competitionId) async {
+    final response = await _dio.get('/competitions/$competitionId/active-state');
     return ActiveState.fromJson(response.data as Map<String, dynamic>);
   }
 

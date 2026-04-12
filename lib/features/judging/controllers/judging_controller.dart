@@ -9,6 +9,7 @@ import '../../../core/models/round.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/centrifugo_service.dart';
 import '../../../core/services/score_queue_service.dart';
+import '../../../core/services/storage_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../realtime/providers/centrifugo_providers.dart';
 
@@ -146,7 +147,9 @@ class JudgingController extends StateNotifier<JudgingState> {
   final CentrifugoService _centrifugo;
   final ApiService _api;
   final ScoreQueueService _queue;
+  final StorageService _storage;
   final String _userUuid;
+  final String _competitionId;
 
   Subscription? _subscription;
   StreamSubscription<PublicationEvent>? _publicationSub;
@@ -156,11 +159,15 @@ class JudgingController extends StateNotifier<JudgingState> {
     required CentrifugoService centrifugo,
     required ApiService api,
     required ScoreQueueService queue,
+    required StorageService storage,
     required String userUuid,
+    required String competitionId,
   })  : _centrifugo = centrifugo,
         _api = api,
         _queue = queue,
+        _storage = storage,
         _userUuid = userUuid,
+        _competitionId = competitionId,
         super(const JudgingState()) {
     _init();
   }
@@ -188,8 +195,95 @@ class JudgingController extends StateNotifier<JudgingState> {
     _publicationSub = _subscription!.publication.listen(_handlePublication);
     _addDebugLog('✅ Připojeno, naslouchám na $channel');
 
+    // Obnova stavu pokud jsme app opustili uprostřed kola
+    await _tryRestoreState();
+
     // Při startu zkusíme odeslat případné offline hodnocení
     await _flushQueue();
+  }
+
+  /// Pokusí se obnovit stav po restartu / pádu aplikace nebo připojení do rozjetého kola.
+  ///
+  /// Cesta 1 – uložená sezení (restart/pád): načte kolo a active-state disciplíny.
+  /// Cesta 2 – žádné uložené sezení (první připojení do rozjetého kola): zavolá
+  ///   competition active-state endpoint, který prohledá disciplíny soutěže.
+  Future<void> _tryRestoreState() async {
+    final storedRoundUuid = _storage.getActiveRoundUuid();
+    if (storedRoundUuid != null && storedRoundUuid.isNotEmpty) {
+      await _restoreFromStoredSession(storedRoundUuid);
+    } else if (_competitionId.isNotEmpty) {
+      await _restoreFromCompetitionState();
+    }
+  }
+
+  /// Cesta 1: Obnoví stav z uloženého roundUuid (restart / pád aplikace).
+  Future<void> _restoreFromStoredSession(String roundUuid) async {
+    _addDebugLog('🔄 Obnova z uloženého sezení (kolo: ${_shortUuid(roundUuid)})...');
+    state = state.copyWith(phase: JudgingPhase.loading, error: null);
+    try {
+      final round = await _api.getRound(roundUuid);
+      final storedDisciplineUuid = _storage.getActiveDisciplineUuid();
+      final disciplineUuid = (storedDisciplineUuid != null && storedDisciplineUuid.isNotEmpty)
+          ? storedDisciplineUuid
+          : round.disciplineUuid;
+      final activeState = await _api.getActiveState(disciplineUuid);
+      _applyRestoredState(round, activeState.hasActiveState ? activeState : null);
+    } catch (e) {
+      state = state.copyWith(phase: JudgingPhase.idle, error: null);
+      _addDebugLog('⚠️ Obnova sezení selhala (kolo patrně skončilo): $e');
+    }
+  }
+
+  /// Cesta 2: Zjistí aktivní stav přes competition endpoint (první připojení do rozjetého kola).
+  Future<void> _restoreFromCompetitionState() async {
+    _addDebugLog('🔄 Zjišťuji aktivní stav soutěže...');
+    state = state.copyWith(phase: JudgingPhase.loading, error: null);
+    try {
+      final activeState = await _api.getCompetitionActiveState(_competitionId);
+      if (!activeState.hasActiveState) {
+        state = state.copyWith(phase: JudgingPhase.idle, error: null);
+        _addDebugLog('ℹ️ Žádné aktivní kolo v soutěži');
+        return;
+      }
+      final roundUuid = activeState.currentRound?.uuid ?? '';
+      if (roundUuid.isEmpty) {
+        state = state.copyWith(phase: JudgingPhase.idle, error: null);
+        _addDebugLog('⚠️ Competition active-state: chybí roundUuid');
+        return;
+      }
+      final round = await _api.getRound(roundUuid);
+      await _storage.saveActiveSession(roundUuid, round.disciplineUuid);
+      _applyRestoredState(round, activeState);
+    } catch (e) {
+      state = state.copyWith(phase: JudgingPhase.idle, error: null);
+      _addDebugLog('⚠️ Zjišťování stavu soutěže selhalo: $e');
+    }
+  }
+
+  /// Aplikuje obnovený stav – sdíleno oběma cestami obnovy.
+  void _applyRestoredState(RoundDetail round, ActiveState? activeState) {
+    if (activeState != null && activeState.currentDance != null) {
+      final alreadyVoted = activeState.judgeHasVoted;
+      state = state.copyWith(
+        phase: JudgingPhase.danceActive,
+        round: round,
+        activeState: activeState,
+        scores: {},
+        scoresSubmitted: alreadyVoted,
+        scoresLocked: alreadyVoted,
+        error: null,
+      );
+      final votedSuffix = alreadyVoted ? ' (hodnocení již odesláno)' : '';
+      _addDebugLog('✅ Stav obnoven: tanec "${activeState.currentDance?.name ?? '?'}" aktivní$votedSuffix');
+    } else {
+      state = state.copyWith(
+        phase: JudgingPhase.roundStarted,
+        round: round,
+        activeState: null,
+        error: null,
+      );
+      _addDebugLog('✅ Stav obnoven: kolo "${round.name}", čekáme na tanec');
+    }
   }
 
   // ── Centrifugo event handling ───────────────────────────────────────────────
@@ -240,6 +334,7 @@ class JudgingController extends StateNotifier<JudgingState> {
         scoresLocked: false,
         error: null,
       );
+      await _storage.saveActiveSession(roundUuid, round.disciplineUuid);
       _addDebugLog('✅ "${round.name}" načteno – ${round.pairs.length} párů'
           ' | ev.system: ${round.evaluationSystem}');
     } catch (e) {
@@ -303,6 +398,7 @@ class JudgingController extends StateNotifier<JudgingState> {
       submitScores();
     }
 
+    _storage.clearActiveSession();
     state = state.copyWith(phase: JudgingPhase.roundEnded);
   }
 
@@ -313,10 +409,21 @@ class JudgingController extends StateNotifier<JudgingState> {
   /// [pairUuid] – discipline_pair_uuid
   /// [value]    – 0/1 pro kola, 1–6 pro finále
   ///
+  /// Pro finálový systém automaticky zruší stejné umístění u jiného páru,
+  /// takže každá hodnota 1–6 je přiřazena nejvýše jednomu páru.
+  ///
   /// Po uzamčení (scoresLocked) změny nejsou povoleny.
   void setScore(String pairUuid, int value) {
     if (state.scoresLocked) return;
     final newScores = Map<String, int>.from(state.scores);
+
+    // Finálový systém: každé umístění musí být unikátní → smazat duplicitu
+    final isFinale =
+        state.activeState?.currentRound?.isFinale ?? state.round?.isFinale ?? false;
+    if (isFinale && value > 0) {
+      newScores.removeWhere((uuid, v) => uuid != pairUuid && v == value);
+    }
+
     newScores[pairUuid] = value;
     state = state.copyWith(scores: newScores, scoresSubmitted: false);
   }
@@ -353,6 +460,26 @@ class JudgingController extends StateNotifier<JudgingState> {
       final crossCount = state.scores.values.where((v) => v == 1).length;
       if (target > 0 && crossCount != target) {
         final msg = 'Označte přesně $target párů (nyní: $crossCount)';
+        state = state.copyWith(error: msg);
+        _addDebugLog('⚠️ Validace: $msg');
+        return false;
+      }
+    }
+
+    // ── Validace finálového systému ───────────────────────────────────────
+    if (isFinale) {
+      // Každý pár musí mít přiřazeno umístění (hodnota > 0)
+      final unscoredCount = allPairs.where((p) => (state.scores[p.uuid] ?? 0) == 0).length;
+      if (unscoredCount > 0) {
+        final msg = 'Ohodnoťte všechny páry ($unscoredCount bez umístění)';
+        state = state.copyWith(error: msg);
+        _addDebugLog('⚠️ Validace: $msg');
+        return false;
+      }
+      // Každé umístění musí být unikátní (safety-net, dedup je v setScore)
+      final assigned = state.scores.values.toList();
+      if (assigned.length != assigned.toSet().length) {
+        const msg = 'Každé umístění musí být použito nejvýše jednou';
         state = state.copyWith(error: msg);
         _addDebugLog('⚠️ Validace: $msg');
         return false;
@@ -438,7 +565,9 @@ class JudgingController extends StateNotifier<JudgingState> {
   void dispose() {
     _publicationSub?.cancel();
     _statusSub?.cancel();
-    _subscription?.unsubscribe();
+    // removeChannel() provede unsubscribe() + removeSubscription() z registru klienta,
+    // takže při příštím otevření screeny nevznikne "already exists" výjimka.
+    _centrifugo.removeChannel('judges:$_userUuid');
     super.dispose();
   }
 }
@@ -451,12 +580,16 @@ class JudgingController extends StateNotifier<JudgingState> {
 ///
 /// autoDispose zajistí, že controller (a Centrifugo subscription) se uvolní
 /// při opuštění obrazovky. Při opětovném vstupu se vytvoří nový controller.
-final judgingControllerProvider =
-    StateNotifierProvider.autoDispose<JudgingController, JudgingState>((ref) {
+/// Provider parametrizovaný competitionId – každá soutěž má svůj izolovaný controller.
+/// autoDispose zajistí uvolnění při opuštění screeny (Centrifugo subscription se odstraní).
+final judgingControllerProvider = StateNotifierProvider.autoDispose
+    .family<JudgingController, JudgingState, String>((ref, competitionId) {
   return JudgingController(
     centrifugo: ref.read(centrifugoServiceProvider),
     api: ApiService(),
     queue: ref.read(scoreQueueServiceProvider),
+    storage: ref.read(storageServiceProvider),
     userUuid: ref.read(authControllerProvider).user?.id ?? '',
+    competitionId: competitionId,
   );
 });

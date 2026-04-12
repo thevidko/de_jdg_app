@@ -83,6 +83,12 @@ class ScoringView extends StatelessWidget {
                         ? _FinalePairRow(
                             pair: pair,
                             selectedValue: currentValue,
+                            // Hodnoty přiřazené ostatním párům – tlačítka se
+                            // zobrazí jako obsazená (vizuální feedback).
+                            usedValues: scores.entries
+                                .where((e) => e.key != pair.uuid && e.value > 0)
+                                .map((e) => e.value)
+                                .toSet(),
                             onChanged: scoresLocked
                                 ? null
                                 : (v) => onScoreChanged(pair.uuid, v),
@@ -104,7 +110,12 @@ class ScoringView extends StatelessWidget {
           isSubmitting: isSubmitting,
           isSubmitted: scoresSubmitted,
           isLocked: scoresLocked,
-          scoredCount: scores.length,
+          // Finále: počítáme páry s hodnotou > 0 (neoznačené = bez umístění)
+          // Kolo: počítáme kříže (hodnota 1) oproti cílovému počtu
+          scoredCount: isFinale
+              ? scores.values.where((v) => v > 0).length
+              : scores.values.where((v) => v == 1).length,
+          targetCount: isFinale ? pairs.length : advancementTarget,
           totalCount: pairs.length,
         ),
       ],
@@ -376,10 +387,17 @@ class _RoundPairRow extends StatelessWidget {
   }
 }
 
-/// Řádek páru pro finále – výběr umístění 1–6.
+/// Řádek páru pro finále – výběr umístění 1–N.
+///
+/// Tlačítka obsazená jiným párem ([usedValues]) jsou vizuálně odlišena –
+/// porotce vidí, která čísla jsou volná. Kliknutím na obsazené číslo se
+/// stávající přiřazení toho páru zruší (logika v JudgingController.setScore).
 class _FinalePairRow extends StatelessWidget {
   final ActivePair pair;
   final int? selectedValue;
+
+  /// Hodnoty přiřazené ostatním párům – zobrazí se jako obsazená.
+  final Set<int> usedValues;
 
   /// null = uzamčeno, nelze měnit
   final ValueChanged<int>? onChanged;
@@ -387,12 +405,16 @@ class _FinalePairRow extends StatelessWidget {
   const _FinalePairRow({
     required this.pair,
     required this.selectedValue,
+    this.usedValues = const {},
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final locked = onChanged == null;
+    final pairCount = usedValues.length + (selectedValue != null ? 1 : 0);
+    final maxValue = pairCount < 6 ? 6 : pairCount;
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: Padding(
@@ -430,11 +452,30 @@ class _FinalePairRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            // Tlačítka 1–6
+            // Tlačítka 1–maxValue (min 6)
             Row(
-              children: List.generate(6, (i) {
+              children: List.generate(maxValue, (i) {
                 final value = i + 1;
                 final isActive = selectedValue == value;
+                final isTaken = !isActive && usedValues.contains(value);
+
+                Color bgColor;
+                Color borderColor;
+                Color textColor;
+                if (isActive) {
+                  bgColor = locked ? Colors.grey : Colors.amber;
+                  borderColor = locked ? Colors.grey : Colors.amber;
+                  textColor = Colors.white;
+                } else if (isTaken) {
+                  bgColor = Colors.amber.withValues(alpha: 0.12);
+                  borderColor = Colors.amber.withValues(alpha: 0.35);
+                  textColor = Colors.amber.shade700;
+                } else {
+                  bgColor = Colors.grey.shade100;
+                  borderColor = Colors.grey.shade300;
+                  textColor = Colors.grey.shade700;
+                }
+
                 return Expanded(
                   child: GestureDetector(
                     onTap: locked ? null : () => onChanged!(value),
@@ -443,14 +484,10 @@ class _FinalePairRow extends StatelessWidget {
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       height: 44,
                       decoration: BoxDecoration(
-                        color: isActive
-                            ? (locked ? Colors.grey : Colors.amber)
-                            : Colors.grey.shade100,
+                        color: bgColor,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isActive
-                              ? (locked ? Colors.grey : Colors.amber)
-                              : Colors.grey.shade300,
+                          color: borderColor,
                           width: isActive ? 2 : 1,
                         ),
                       ),
@@ -458,11 +495,8 @@ class _FinalePairRow extends StatelessWidget {
                       child: Text(
                         '$value',
                         style: TextStyle(
-                          fontWeight: isActive
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color:
-                              isActive ? Colors.white : Colors.grey.shade700,
+                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                          color: textColor,
                           fontSize: 16,
                         ),
                       ),
@@ -517,6 +551,10 @@ class _SubmitButton extends StatelessWidget {
   final bool isSubmitted;
   final bool isLocked;
   final int scoredCount;
+
+  /// Počet, který musí být ohodnocen před odesláním.
+  /// Finále: počet párů. Kolo: advancementTarget.
+  final int targetCount;
   final int totalCount;
 
   const _SubmitButton({
@@ -525,12 +563,15 @@ class _SubmitButton extends StatelessWidget {
     required this.isSubmitted,
     required this.isLocked,
     required this.scoredCount,
+    required this.targetCount,
     required this.totalCount,
   });
 
   @override
   Widget build(BuildContext context) {
-    final allScored = scoredCount >= totalCount && totalCount > 0;
+    final allScored = targetCount > 0
+        ? scoredCount >= targetCount
+        : scoredCount >= totalCount && totalCount > 0;
 
     Color bgColor;
     if (isLocked) {

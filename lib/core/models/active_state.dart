@@ -28,10 +28,15 @@ class ActiveState {
   /// Pořadí: dle pořadí heatů, uvnitř heatu dle pořadí heat_pairs.
   final List<ActivePair> allRoundPairs;
 
+  /// true pokud porotce již odeslal hodnocení pro aktuální tanec.
+  /// Nastavuje se při reconnectu – formulář se zobrazí jako uzamčený.
+  final bool judgeHasVoted;
+
   const ActiveState({
     required this.currentRound,
     required this.currentDance,
     required this.allRoundPairs,
+    this.judgeHasVoted = false,
   });
 
   bool get hasActiveState => currentRound != null || currentDance != null;
@@ -71,6 +76,7 @@ class ActiveState {
           ? ActiveDance.fromJson(data['current_dance'] as Map<String, dynamic>)
           : null,
       allRoundPairs: pairs,
+      judgeHasVoted: data['judge_has_voted'] as bool? ?? false,
     );
   }
 }

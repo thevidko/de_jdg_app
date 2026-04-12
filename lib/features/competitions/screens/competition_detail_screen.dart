@@ -21,8 +21,8 @@ class CompetitionDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(judgingControllerProvider);
-    final controller = ref.read(judgingControllerProvider.notifier);
+    final state = ref.watch(judgingControllerProvider(competitionId));
+    final controller = ref.read(judgingControllerProvider(competitionId).notifier);
 
     return Scaffold(
       appBar: AppBar(
