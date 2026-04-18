@@ -1,4 +1,4 @@
-mport 'package:de_jdg_app/core/services/api_service.dart';
+import 'package:de_jdg_app/core/services/api_service.dart';
 import 'package:de_jdg_app/core/services/discovery_service.dart';
 import 'package:de_jdg_app/core/services/storage_service.dart';
 import 'package:de_jdg_app/core/theme/app_colors.dart';
@@ -83,7 +83,8 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     });
 
     // Ověříme živost serveru (nebo použijeme výsledek z cache)
-    final health = _health[backend.url] ?? await _discovery.verifyBackend(backend.url);
+    final health =
+        _health[backend.url] ?? await _discovery.verifyBackend(backend.url);
     if (!mounted) return;
 
     if (!health.reachable) {
@@ -172,7 +173,10 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _CurrentServerCard(url: currentUrl, onDisconnect: _clearBackend),
+                _CurrentServerCard(
+                  url: currentUrl,
+                  onDisconnect: _clearBackend,
+                ),
                 const SizedBox(height: 28),
 
                 // --- Sekce: Automatické vyhledávání ---
@@ -189,7 +193,9 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                     ),
                     const Spacer(),
                     TextButton.icon(
-                      onPressed: (_isScanning || _isVerifying) ? null : _startScan,
+                      onPressed: (_isScanning || _isVerifying)
+                          ? null
+                          : _startScan,
                       icon: const Icon(Icons.refresh, size: 16),
                       label: const Text('Skenovat znovu'),
                       style: TextButton.styleFrom(
@@ -208,15 +214,17 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 else if (_backends.isEmpty)
                   const _EmptyCard()
                 else
-                  ..._backends.map((b) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _BackendCard(
-                          backend: b,
-                          isSelected: currentUrl == b.url,
-                          health: _health[b.url],
-                          onSelect: _isVerifying ? null : () => _selectBackend(b),
-                        ),
-                      )),
+                  ..._backends.map(
+                    (b) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _BackendCard(
+                        backend: b,
+                        isSelected: currentUrl == b.url,
+                        health: _health[b.url],
+                        onSelect: _isVerifying ? null : () => _selectBackend(b),
+                      ),
+                    ),
+                  ),
 
                 const SizedBox(height: 32),
 
@@ -262,7 +270,9 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.primary,
+                            ),
                           ),
                         ),
                         SizedBox(width: 16),
@@ -319,7 +329,9 @@ class _CurrentServerCard extends StatelessWidget {
                   isConnected ? 'Aktuálně připojeno' : 'Není vybrán server',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isConnected ? AppColors.primary : AppColors.inverseOnSurface,
+                    color: isConnected
+                        ? AppColors.primary
+                        : AppColors.inverseOnSurface,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -327,7 +339,10 @@ class _CurrentServerCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     Uri.parse(url!).host,
-                    style: const TextStyle(fontSize: 13, color: AppColors.onSurface),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.onSurface,
+                    ),
                   ),
                 ],
               ],
@@ -371,8 +386,10 @@ class _ScanningIndicator extends StatelessWidget {
             ),
           ),
           SizedBox(height: 16),
-          Text('Skenování sítě…',
-              style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 14)),
+          Text(
+            'Skenování sítě…',
+            style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 14),
+          ),
         ],
       ),
     );
@@ -395,9 +412,13 @@ class _EmptyCard extends StatelessWidget {
         children: [
           Icon(Icons.search_off, color: AppColors.inverseOnSurface, size: 32),
           SizedBox(height: 12),
-          Text('Žádný server nenalezen',
-              style: TextStyle(
-                  color: AppColors.onSurfaceVariant, fontWeight: FontWeight.w500)),
+          Text(
+            'Žádný server nenalezen',
+            style: TextStyle(
+              color: AppColors.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           SizedBox(height: 4),
           Text(
             'Ujistěte se, že jste na stejné Wi-Fi síti\njako server a že běží discovery:serve.',
@@ -428,8 +449,10 @@ class _ErrorCard extends StatelessWidget {
           const Icon(Icons.error_outline, color: AppColors.error, size: 20),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(message,
-                style: const TextStyle(color: AppColors.error, fontSize: 13)),
+            child: Text(
+              message,
+              style: const TextStyle(color: AppColors.error, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -475,7 +498,11 @@ class _BackendCard extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.dns_outlined, color: AppColors.primary, size: 20),
+            child: const Icon(
+              Icons.dns_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -500,7 +527,9 @@ class _BackendCard extends StatelessWidget {
                 Text(
                   Uri.parse(backend.url).host,
                   style: const TextStyle(
-                      color: AppColors.onSurfaceVariant, fontSize: 12),
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -515,16 +544,23 @@ class _BackendCard extends StatelessWidget {
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 textStyle: const TextStyle(fontSize: 13),
                 elevation: 0,
               ),
               child: const Text('Vybrat'),
             )
           else if (!isChecking && !isReachable)
-            const Icon(Icons.cloud_off_outlined,
-                color: AppColors.inverseOnSurface, size: 22),
+            const Icon(
+              Icons.cloud_off_outlined,
+              color: AppColors.inverseOnSurface,
+              size: 22,
+            ),
         ],
       ),
     );
@@ -619,12 +655,15 @@ class _ManualInputCard extends StatelessWidget {
               foregroundColor: Colors.white,
               disabledBackgroundColor: AppColors.outlineVariant,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(vertical: 14),
               elevation: 0,
             ),
-            child: const Text('Ověřit a uložit',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+            child: const Text(
+              'Ověřit a uložit',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
