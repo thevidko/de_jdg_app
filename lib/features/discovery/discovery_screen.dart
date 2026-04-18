@@ -1,4 +1,4 @@
-import 'package:de_jdg_app/core/services/api_service.dart';
+mport 'package:de_jdg_app/core/services/api_service.dart';
 import 'package:de_jdg_app/core/services/discovery_service.dart';
 import 'package:de_jdg_app/core/services/storage_service.dart';
 import 'package:de_jdg_app/core/theme/app_colors.dart';

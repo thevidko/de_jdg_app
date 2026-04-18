@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/router/app_router.dart';
 import 'core/services/storage_service.dart';
@@ -11,6 +12,8 @@ import 'features/realtime/providers/centrifugo_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await WakelockPlus.enable();
 
   final prefs = await SharedPreferences.getInstance();
 

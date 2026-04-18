@@ -96,6 +96,7 @@ class ScoringView extends StatelessWidget {
         final currentValue = scores[pair.uuid];
         return _FinalePairRow(
           pair: pair,
+          totalPairs: pairs.length,
           selectedValue: currentValue,
           usedValues: scores.entries
               .where((e) => e.key != pair.uuid && e.value > 0)
@@ -387,12 +388,14 @@ class _GridCrossButton extends StatelessWidget {
 /// Finálový výpis (umístění)
 class _FinalePairRow extends StatelessWidget {
   final ActivePair pair;
+  final int totalPairs;
   final int? selectedValue;
   final Set<int> usedValues;
   final ValueChanged<int>? onChanged;
 
   const _FinalePairRow({
     required this.pair,
+    required this.totalPairs,
     required this.selectedValue,
     this.usedValues = const {},
     required this.onChanged,
@@ -401,8 +404,10 @@ class _FinalePairRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locked = onChanged == null;
-    final pairCount = usedValues.length + (selectedValue != null ? 1 : 0);
-    final maxValue = pairCount < 6 ? 6 : pairCount;
+    final maxValue = totalPairs > 6 ? totalPairs : 6;
+
+    final double btnSize = maxValue > 9 ? 40.0 : (maxValue > 6 ? 46.0 : 52.0);
+    final double fontSize = maxValue > 9 ? 16.0 : (maxValue > 6 ? 18.0 : 20.0);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -418,13 +423,13 @@ class _FinalePairRow extends StatelessWidget {
               offset: const Offset(0, 4),
             ),
           ],
-          border: selectedValue != null 
-                ? Border.all(color: AppColors.primary, width: 2)
-                : Border.all(color: AppColors.outline.withOpacity(0.1), width: 1),
+          border: selectedValue != null
+              ? Border.all(color: AppColors.primary, width: 2)
+              : Border.all(color: AppColors.outline.withOpacity(0.1), width: 1),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Startovní číslo - nyní velmi prominentní velký čtverec vlevo
             Container(
               width: 56,
               height: 56,
@@ -444,10 +449,10 @@ class _FinalePairRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            // Tlačítka pro umístění rozprostřená horizontálně
             Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
                 children: List.generate(maxValue, (i) {
                   final value = i + 1;
                   final isActive = selectedValue == value;
@@ -456,7 +461,7 @@ class _FinalePairRow extends StatelessWidget {
                   Color bgColor;
                   Color borderColor;
                   Color textColor;
-                  
+
                   if (isActive) {
                     bgColor = locked ? Colors.grey : AppColors.primary;
                     borderColor = locked ? Colors.grey : AppColors.primary;
@@ -471,30 +476,28 @@ class _FinalePairRow extends StatelessWidget {
                     textColor = AppColors.onSurfaceVariant;
                   }
 
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: locked ? null : () => onChanged!(value),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: bgColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: borderColor,
-                            width: isActive ? 0 : 1,
-                          ),
+                  return GestureDetector(
+                    onTap: locked ? null : () => onChanged!(value),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: btnSize,
+                      height: btnSize,
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: borderColor,
+                          width: isActive ? 0 : 1,
                         ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          '$value',
-                          style: TextStyle(
-                            fontWeight: isActive ? FontWeight.w900 : FontWeight.w700,
-                            color: textColor,
-                            fontSize: 20,
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$value',
+                        style: TextStyle(
+                          fontWeight: isActive ? FontWeight.w900 : FontWeight.w700,
+                          color: textColor,
+                          fontSize: fontSize,
+                          fontFamily: 'Plus Jakarta Sans',
                         ),
                       ),
                     ),

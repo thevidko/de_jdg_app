@@ -81,11 +81,13 @@ class DiscoveryService {
           try {
             final json =
                 jsonDecode(utf8.decode(datagram.data)) as Map<String, dynamic>;
-            found.add(DiscoveredBackend(
-              name: json['name'] as String? ?? 'DanceEval Backend',
-              url: json['url'] as String,
-              wsUrl: json['ws_url'] as String,
-            ));
+            found.add(
+              DiscoveredBackend(
+                name: json['name'] as String? ?? 'DanceEval Backend',
+                url: json['url'] as String,
+                wsUrl: json['ws_url'] as String,
+              ),
+            );
           } catch (_) {}
         }
       });
@@ -142,9 +144,14 @@ class DiscoveryService {
   /// Vrátí directed broadcast adresy pro všechna aktivní IPv4 rozhraní.
   /// Předpokládá /24 (nejčastější domácí/firemní sítě).
   Future<List<InternetAddress>> _getBroadcastAddresses() async {
-    final result = <InternetAddress>[
-      InternetAddress('255.255.255.255'), // Obecny lokalni broadcast fallback
-    ];
+    final seen = <String>{};
+    final result = <InternetAddress>[];
+
+    void add(String ip) {
+      if (seen.add(ip)) result.add(InternetAddress(ip));
+    }
+
+    // Primární zdroj: standardní Dart API (spolehlivé na Android 12+).
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
@@ -155,13 +162,28 @@ class DiscoveryService {
           if (addr.isLoopback) continue;
           final parts = addr.address.split('.');
           if (parts.length == 4) {
-            result.add(
-              InternetAddress('${parts[0]}.${parts[1]}.${parts[2]}.255'),
-            );
+            add('${parts[0]}.${parts[1]}.${parts[2]}.255');
           }
         }
       }
     } catch (_) {}
+
+    // Záložní zdroj: WifiManager přes platform channel.
+    // Na Android 12+ vrátí null (NetworkInterface tam funguje spolehlivě).
+    // Na Android 11 a níže doplní adresu, pokud ji NetworkInterface.list() vynechal.
+    try {
+      final ip = await _channel.invokeMethod<String?>('getWifiIp');
+      if (ip != null) {
+        final parts = ip.split('.');
+        if (parts.length == 4) {
+          add('${parts[0]}.${parts[1]}.${parts[2]}.255');
+        }
+      }
+    } catch (_) {}
+
+    // Poslední záchrana pokud oba zdroje selžou.
+    if (result.isEmpty) add('255.255.255.255');
+
     return result;
   }
 }

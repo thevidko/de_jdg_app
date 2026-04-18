@@ -42,19 +42,23 @@ dependencies:
   path_provider: ^2.1.5
   intl: ^0.20.2
   centrifuge: ^0.18.0
+  wakelock_plus: ^1.2.10
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
   riverpod_generator: ^2.3.9
   build_runner: ^2.4.8
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#702AE1"
+  adaptive_icon_foreground: "assets/icon/icon.png"
+  min_sdk_android: 21
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
