@@ -6,22 +6,23 @@ import 'core/services/storage_service.dart';
 import 'core/services/score_queue_service.dart';
 import 'core/services/api_service.dart';
 import 'core/theme/app_theme.dart';
-import 'features/realtime/providers/centrifugo_providers.dart'; // <--- Import provideru
+import 'features/auth/controllers/auth_controller.dart';
+import 'features/realtime/providers/centrifugo_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Načtení SharedPreferences před startem appky
   final prefs = await SharedPreferences.getInstance();
 
-  // Inicializace API a Cookies
-  await ApiService().init(); // <--- Tady se připraví cookie jar
+  // Načtení uložené URL backendu (pokud uživatel vybral server přes discovery)
+  final backendUrl = prefs.getString('backend_url');
+  final wsUrl = prefs.getString('ws_url');
+
+  await ApiService().init(baseUrl: backendUrl, wsUrl: wsUrl);
 
   runApp(
-    // 2. ProviderScope obaluje celou aplikaci (jako Pinia root)
     ProviderScope(
       overrides: [
-        // 3. Injectneme vytvořené instance do providerů
         storageServiceProvider.overrideWithValue(StorageService(prefs)),
         scoreQueueServiceProvider.overrideWithValue(ScoreQueueService(prefs)),
       ],
@@ -30,22 +31,43 @@ void main() async {
   );
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // 4. Načteme router
-    final router = ref.watch(routerProvider);
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
 
-    // 5. Aktivujeme realtime controller (Centrifugo)
+class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed) {
+      // Při návratu z pozadí ověříme dostupnost serveru.
+      ref.read(authControllerProvider.notifier).checkBackendHealth();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final router = ref.watch(routerProvider);
     ref.watch(realtimeControllerProvider);
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'DanceEval Judge',
       theme: AppTheme.lightTheme,
-      // 6. Napojení GoRouteru
       routerConfig: router,
     );
   }

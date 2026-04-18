@@ -1,5 +1,6 @@
 import 'package:de_jdg_app/features/auth/screens/login_screen.dart';
 import 'package:de_jdg_app/features/competitions/screens/competition_screen.dart';
+import 'package:de_jdg_app/features/discovery/discovery_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,10 +22,12 @@ final routerProvider = Provider<GoRouter>((ref) {
 
     redirect: (context, state) {
       final isLoggedIn = authState.isAuthenticated;
-      final isLoggingIn = state.uri.toString() == '/login';
+      final path = state.uri.toString();
+      final isLoggingIn = path == '/login';
+      final isDiscovery = path == '/discovery';
 
-      // 1. Pokud není přihlášen a není na loginu -> šup na login
-      if (!isLoggedIn && !isLoggingIn) return '/login';
+      // 1. Pokud není přihlášen a není na loginu nebo discovery -> šup na login
+      if (!isLoggedIn && !isLoggingIn && !isDiscovery) return '/login';
 
       // 2. Pokud je přihlášen a je na loginu -> šup domů
       if (isLoggedIn && isLoggingIn) return '/';
@@ -39,6 +42,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             const CompetitionsScreen(), // <--- Změna zde
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/discovery',
+        builder: (context, state) => const DiscoveryScreen(),
+      ),
     ],
   );
 });

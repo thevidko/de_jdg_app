@@ -23,9 +23,15 @@ class StorageService {
       _secureStorage.write(key: 'ws_token', value: token);
   Future<String?> getWsToken() => _secureStorage.read(key: 'ws_token');
 
+  /// Smaže auth data (tokeny, profil, sezení) ale zachová konfiguraci serveru.
   Future<void> clearAll() async {
     await _secureStorage.deleteAll();
-    await _prefs.clear(); // Vymaže i profilová data
+    await _prefs.remove('user_id');
+    await _prefs.remove('user_name');
+    await _prefs.remove('user_surname');
+    await _prefs.remove('locale');
+    await _prefs.remove('first_run');
+    // backend_url a ws_url záměrně zachováváme — server zůstane nastaven pro další přihlášení
   }
 
   // --- Normal Data (Settings, Flags) ---
@@ -54,6 +60,22 @@ class StorageService {
       return User(id: id, name: name, surname: surname);
     }
     return null;
+  }
+
+  // --- Backend konfigurace (URL serveru) ---
+  static const String _backendUrlKey = 'backend_url';
+  static const String _wsUrlKey = 'ws_url';
+
+  Future<void> setBackendUrl(String url) =>
+      _prefs.setString(_backendUrlKey, url);
+  String? getBackendUrl() => _prefs.getString(_backendUrlKey);
+
+  Future<void> setWsUrl(String url) => _prefs.setString(_wsUrlKey, url);
+  String? getWsUrl() => _prefs.getString(_wsUrlKey);
+
+  Future<void> clearBackendConfig() async {
+    await _prefs.remove(_backendUrlKey);
+    await _prefs.remove(_wsUrlKey);
   }
 
   // --- Aktivní sezení porotce (pro obnovu stavu po restartu) ---

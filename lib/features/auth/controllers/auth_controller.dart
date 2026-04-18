@@ -52,16 +52,44 @@ class AuthController extends StateNotifier<AuthState> {
     state = AuthState(isLoading: true);
     final token = await _storage.getToken();
 
-    if (token != null) {
-      // Pokud máme token, zkusíme načíst i user data z cache (SharedPreferences)
-      final cachedUser = _storage.getUser();
-      state = AuthState(
-        isAuthenticated: true,
-        isLoading: false,
-        user: cachedUser,
-      );
-    } else {
+    if (token == null) {
       state = AuthState(isAuthenticated: false, isLoading: false);
+      return;
+    }
+
+    // Ověříme dostupnost backendu před tím, než uživatele pustíme dál.
+    final backendOk = await _api.checkHealth();
+    if (!backendOk) {
+      await _api.logout();
+      await _storage.clearAll();
+      await _storage.clearBackendConfig();
+      _api.resetUrls();
+      state = AuthState(
+        isAuthenticated: false,
+        isLoading: false,
+        error: 'Server není dostupný. Zkontrolujte Wi-Fi nebo vyberte jiný server.',
+      );
+      return;
+    }
+
+    final cachedUser = _storage.getUser();
+    state = AuthState(isAuthenticated: true, isLoading: false, user: cachedUser);
+  }
+
+  /// Voláno při návratu aplikace do popředí.
+  /// Pokud server přestal odpovídat, odhlásí uživatele.
+  Future<void> checkBackendHealth() async {
+    if (!state.isAuthenticated) return;
+    final ok = await _api.checkHealth();
+    if (!ok && mounted) {
+      await _api.logout();
+      await _storage.clearAll();
+      await _storage.clearBackendConfig();
+      _api.resetUrls();
+      state = AuthState(
+        isAuthenticated: false,
+        error: 'Spojení se serverem bylo přerušeno. Přihlaste se znovu.',
+      );
     }
   }
 

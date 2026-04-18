@@ -23,13 +23,59 @@ class ApiService {
   final _authFailureController = StreamController<void>.broadcast();
   Stream<void> get authFailureStream => _authFailureController.stream;
 
-  // Zjisti správnou URL (pro tablet s ADB Reverse nebo emulátor)
-  final String _baseUrl = 'http://localhost:8000/api/v1';
+  static const String _defaultBaseUrl = 'http://localhost:8000/api/v1';
+  static const String _defaultWsUrl =
+      'ws://localhost:8010/connection/websocket';
+
+  String _baseUrl = _defaultBaseUrl;
+  String _wsUrl = _defaultWsUrl;
+
+  String get wsUrl => _wsUrl;
 
   ApiService._internal();
 
+  /// Zkontroluje dostupnost backendu přes GET /up (Laravel built-in health endpoint).
+  ///
+  /// Jde přímo na origin (bez /api/v1), timeout 5 s.
+  /// Vrací true pokud server odpoví 200.
+  Future<bool> checkHealth() async {
+    try {
+      final uri = Uri.parse(_baseUrl);
+      final port = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
+      final upUrl = Uri.parse('${uri.scheme}://${uri.host}:$port/up');
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 5);
+      try {
+        final req = await client.getUrl(upUrl);
+        final res = await req.close().timeout(const Duration(seconds: 5));
+        await res.drain<void>();
+        return res.statusCode == 200;
+      } finally {
+        client.close(force: true);
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Aktualizuje base URL za běhu (po výběru serveru v discovery screenu).
+  void updateUrls(String baseUrl, String wsUrl) {
+    _baseUrl = baseUrl;
+    _wsUrl = wsUrl;
+    _dio.options.baseUrl = baseUrl;
+  }
+
+  /// Resetuje URL na výchozí hodnoty (localhost) — voláno při výmazu konfigurace serveru.
+  void resetUrls() {
+    _baseUrl = _defaultBaseUrl;
+    _wsUrl = _defaultWsUrl;
+    _dio.options.baseUrl = _defaultBaseUrl;
+  }
+
   // Tuto metodu musíme zavolat v main.dart před spuštěním aplikace!
-  Future<void> init() async {
+  Future<void> init({String? baseUrl, String? wsUrl}) async {
+    if (baseUrl != null && baseUrl.isNotEmpty) _baseUrl = baseUrl;
+    if (wsUrl != null && wsUrl.isNotEmpty) _wsUrl = wsUrl;
     // 1. Nastavení cesty pro ukládání cookies
     final appDocDir = await getApplicationDocumentsDirectory();
     final cookiePath = "${appDocDir.path}/.cookies/";

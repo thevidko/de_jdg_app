@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:centrifuge/centrifuge.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -16,9 +15,6 @@ class CentrifugoService {
 
   final ApiService _apiService;
   final _storage = const FlutterSecureStorage();
-
-  // URL pro WebSocket (pozor na Android emulátor vs iOS/Web)
-  final String _wsUrl = 'ws://localhost:8010/connection/websocket';
 
   CentrifugoService(this._apiService);
 
@@ -75,7 +71,7 @@ class CentrifugoService {
     await disconnect();
 
     print("🔄 Vytvářím nový Centrifugo Client...");
-    _client = createClient(_wsUrl, ClientConfig(token: wsToken));
+    _client = createClient(_apiService.wsUrl, ClientConfig(token: wsToken));
 
     _connectSub = _client?.connected.listen((event) {
       final msg = "✅ Centrifugo: Připojeno (Client ID: ${event.client})";
@@ -90,7 +86,7 @@ class CentrifugoService {
     });
 
     try {
-      _updateStatus("⏳ Připojuji se k Centrifugu ($_wsUrl)...");
+      _updateStatus("⏳ Připojuji se k Centrifugu (${_apiService.wsUrl})...");
       await _client?.connect();
     } catch (e) {
       final msg = "🔥 Centrifugo Error: $e";
