@@ -4,8 +4,7 @@ class Competition {
   final String location;
   final DateTime dateStart;
   final String? organizer;
-  final int
-  status; // Předpokládám, že status je int (např. 1 = připravuje se, 2 = běží...)
+  final int status;
 
   Competition({
     required this.id,
@@ -23,7 +22,6 @@ class Competition {
       id: json['id'],
       name: attributes['name'] ?? 'Neznámá soutěž',
       location: attributes['location'] ?? 'Neznámé místo',
-      // Datum může přijít jako string, musíme ho parsovat
       dateStart:
           DateTime.tryParse(attributes['dateStart'] ?? '') ?? DateTime.now(),
       organizer: attributes['organizer'],

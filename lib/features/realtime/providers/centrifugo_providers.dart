@@ -6,7 +6,6 @@ import '../../auth/controllers/auth_controller.dart';
 // Provider pro samotnou službu
 final centrifugoServiceProvider = Provider<CentrifugoService>((ref) {
   // Potřebujeme ApiService pro volání auth endpointu
-  // V tvém kódu je ApiService Singleton, ale pro čistotu ho můžeme volat takto
   return CentrifugoService(ApiService());
 });
 
@@ -16,11 +15,9 @@ final realtimeControllerProvider = Provider<void>((ref) {
   final centrifugo = ref.read(centrifugoServiceProvider);
 
   // Zkontrolujeme, zda máme autentikovaného uživatele a zda máme ws_token
-  // (Někdy může být isAuthenticated true z cache, ale token ještě není načtený/platný,
-  // i když v AuthControlleru se to děje atomicky, je dobré to mít na paměti.)
   if (authState.isAuthenticated) {
     // Pokud je uživatel přihlášen, připojíme socket
-    print("🚀 Spouštím Realtime spojení...");
+    print("Spouštím Realtime spojení...");
     centrifugo.connect();
   } else {
     // Pokud se odhlásí, odpojíme

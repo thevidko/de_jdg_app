@@ -1,35 +1,11 @@
-/// Model aktivního stavu disciplíny.
-///
-/// Odpověď z: GET /api/v1/disciplines/{disciplineUuid}/active-state
-///
-/// Struktura (plain JSON, ne JSON:API):
-/// {
-///   "data": {
-///     "current_round": { ... },
-///     "current_dance": { "dance": { ... }, ... },
-///     "all_round_pairs": [          ← pole HEATŮ (ne párů přímo!)
-///       {
-///         "uuid": "heat-uuid",
-///         "name": "Heat 1",
-///         "heat_pairs": [
-///           { "discipline_pair_uuid": "...", "discipline_pair": { "bib_number": 101, ... } }
-///         ]
-///       }
-///     ]
-///   }
-/// }
 library;
 
 class ActiveState {
   final ActiveRound? currentRound;
   final ActiveDance? currentDance;
 
-  /// Plochý seznam párů ke hodnocení – extrahovaný ze všech heatů.
-  /// Pořadí: dle pořadí heatů, uvnitř heatu dle pořadí heat_pairs.
   final List<ActivePair> allRoundPairs;
 
-  /// true pokud porotce již odeslal hodnocení pro aktuální tanec.
-  /// Nastavuje se při reconnectu – formulář se zobrazí jako uzamčený.
   final bool judgeHasVoted;
 
   const ActiveState({
@@ -51,7 +27,6 @@ class ActiveState {
       );
     }
 
-    // Parsujeme heaty a z nich extrahujeme discipline pairs
     final heatsRaw = data['all_round_pairs'] as List<dynamic>? ?? [];
     final pairs = <ActivePair>[];
     for (final heatRaw in heatsRaw) {
@@ -86,13 +61,11 @@ class ActiveState {
 /// Informace o aktuálním kole z active-state.
 class ActiveRound {
   final String uuid;
-  final String name;  // e.g. "Čtvrtfinále"
+  final String name;
   final int order;
-  final bool isFinale; // false = křížky (0/1), true = umístění (1-6)
-  final int evaluationSystem; // raw hodnota
+  final bool isFinale;
+  final int evaluationSystem;
 
-  /// Počet párů, kteří mají postoupit (pro křížkový systém).
-  /// Porotce musí označit přesně tolik párů – ne víc, ne míň.
   final int advancementTarget;
 
   const ActiveRound({
@@ -156,7 +129,7 @@ class ActivePair {
   /// Startovní číslo (bib_number)
   final int bibNumber;
 
-  /// Název heatu, ve kterém pár startuje (e.g. "Heat 1") – pro příp. zobrazení
+  /// Název heatu, ve kterém pár startuje (e.g. "Heat 1")
   final String heatName;
 
   const ActivePair({
@@ -170,7 +143,10 @@ class ActivePair {
   /// Parsuje heat_pair objekt z all_round_pairs[].heat_pairs[].
   ///
   /// Vrátí null pokud chybí discipline_pair nebo bib_number.
-  static ActivePair? fromHeatPair(Map<String, dynamic> heatPair, String heatName) {
+  static ActivePair? fromHeatPair(
+    Map<String, dynamic> heatPair,
+    String heatName,
+  ) {
     final disciplinePair = heatPair['discipline_pair'] as Map<String, dynamic>?;
     if (disciplinePair == null) return null;
 

@@ -175,7 +175,6 @@ class JudgingController extends StateNotifier<JudgingState> {
   // ── Inicializace ────────────────────────────────────────────────────────────
 
   Future<void> _init() async {
-    // Sledujeme stav Centrifugo spojení a propisujeme ho do state
     _statusSub = _centrifugo.statusStream.listen((status) {
       if (mounted) state = state.copyWith(connectionStatus: status);
     });
@@ -183,18 +182,17 @@ class JudgingController extends StateNotifier<JudgingState> {
 
     // Přihlásíme se k privátnímu kanálu porotce
     final channel = 'judges:$_userUuid';
-    _addDebugLog('🔌 Přihlašuji se k: $channel');
+    _addDebugLog('Přihlašuji se k: $channel');
 
     _subscription = await _centrifugo.subscribe(channel);
     if (_subscription == null) {
-      _addDebugLog('❌ Nepodařilo se přihlásit k $channel');
+      _addDebugLog('Nepodařilo se přihlásit k $channel');
       return;
     }
 
     // Nasloucháme zprávám
     _publicationSub = _subscription!.publication.listen(_handlePublication);
-    _addDebugLog('✅ Připojeno, naslouchám na $channel');
-
+    _addDebugLog('Připojeno, naslouchám na $channel');
     // Obnova stavu pokud jsme app opustili uprostřed kola
     await _tryRestoreState();
 
@@ -230,25 +228,25 @@ class JudgingController extends StateNotifier<JudgingState> {
       _applyRestoredState(round, activeState.hasActiveState ? activeState : null);
     } catch (e) {
       state = state.copyWith(phase: JudgingPhase.idle, error: null);
-      _addDebugLog('⚠️ Obnova sezení selhala (kolo patrně skončilo): $e');
+      _addDebugLog('Obnova sezení selhala (kolo patrně skončilo): $e');
     }
   }
 
   /// Cesta 2: Zjistí aktivní stav přes competition endpoint (první připojení do rozjetého kola).
   Future<void> _restoreFromCompetitionState() async {
-    _addDebugLog('🔄 Zjišťuji aktivní stav soutěže...');
+    _addDebugLog('Zjišťuji aktivní stav soutěže...');
     state = state.copyWith(phase: JudgingPhase.loading, error: null);
     try {
       final activeState = await _api.getCompetitionActiveState(_competitionId);
       if (!activeState.hasActiveState) {
         state = state.copyWith(phase: JudgingPhase.idle, error: null);
-        _addDebugLog('ℹ️ Žádné aktivní kolo v soutěži');
+        _addDebugLog('ℹŽádné aktivní kolo v soutěži');
         return;
       }
       final roundUuid = activeState.currentRound?.uuid ?? '';
       if (roundUuid.isEmpty) {
         state = state.copyWith(phase: JudgingPhase.idle, error: null);
-        _addDebugLog('⚠️ Competition active-state: chybí roundUuid');
+        _addDebugLog('Competition active-state: chybí roundUuid');
         return;
       }
       final round = await _api.getRound(roundUuid);
@@ -256,7 +254,7 @@ class JudgingController extends StateNotifier<JudgingState> {
       _applyRestoredState(round, activeState);
     } catch (e) {
       state = state.copyWith(phase: JudgingPhase.idle, error: null);
-      _addDebugLog('⚠️ Zjišťování stavu soutěže selhalo: $e');
+      _addDebugLog('Zjišťování stavu soutěže selhalo: $e');
     }
   }
 
@@ -274,7 +272,7 @@ class JudgingController extends StateNotifier<JudgingState> {
         error: null,
       );
       final votedSuffix = alreadyVoted ? ' (hodnocení již odesláno)' : '';
-      _addDebugLog('✅ Stav obnoven: tanec "${activeState.currentDance?.name ?? '?'}" aktivní$votedSuffix');
+      _addDebugLog('Stav obnoven: tanec "${activeState.currentDance?.name ?? '?'}" aktivní$votedSuffix');
     } else {
       state = state.copyWith(
         phase: JudgingPhase.roundStarted,
@@ -282,7 +280,7 @@ class JudgingController extends StateNotifier<JudgingState> {
         activeState: null,
         error: null,
       );
-      _addDebugLog('✅ Stav obnoven: kolo "${round.name}", čekáme na tanec');
+      _addDebugLog('Stav obnoven: kolo "${round.name}", čekáme na tanec');
     }
   }
 
@@ -295,7 +293,7 @@ class JudgingController extends StateNotifier<JudgingState> {
       final eventName = payload['event'] as String? ?? '';
       final eventData = (payload['data'] as Map<String, dynamic>?) ?? {};
 
-      _addDebugLog('📩 Event: $eventName');
+      _addDebugLog('Event: $eventName');
 
       switch (eventName) {
         case 'START_ROUND':
@@ -305,10 +303,10 @@ class JudgingController extends StateNotifier<JudgingState> {
         case 'END_ROUND':
           _handleEndRound(eventData);
         default:
-          _addDebugLog('❓ Neznámý event: $eventName | data: $eventData');
+          _addDebugLog('Neznámý event: $eventName | data: $eventData');
       }
     } catch (e) {
-      _addDebugLog('⚠️ Chyba parsování eventu: $e');
+      _addDebugLog('Chyba parsování eventu: $e');
     }
   }
 
@@ -316,12 +314,12 @@ class JudgingController extends StateNotifier<JudgingState> {
   Future<void> _handleStartRound(Map<String, dynamic> data) async {
     final roundUuid = data['roundUuid'] as String?;
     if (roundUuid == null) {
-      _addDebugLog('⚠️ START_ROUND: chybí roundUuid');
+      _addDebugLog('START_ROUND: chybí roundUuid');
       return;
     }
 
     state = state.copyWith(phase: JudgingPhase.loading, error: null);
-    _addDebugLog('🔄 Načítám kolo: $roundUuid');
+    _addDebugLog('Načítám kolo: $roundUuid');
 
     try {
       final round = await _api.getRound(roundUuid);
@@ -335,11 +333,11 @@ class JudgingController extends StateNotifier<JudgingState> {
         error: null,
       );
       await _storage.saveActiveSession(roundUuid, round.disciplineUuid, competitionId: _competitionId);
-      _addDebugLog('✅ "${round.name}" načteno – ${round.pairs.length} párů'
+      _addDebugLog('"${round.name}" načteno – ${round.pairs.length} párů'
           ' | ev.system: ${round.evaluationSystem}');
     } catch (e) {
       state = state.copyWith(phase: JudgingPhase.idle, error: e.toString());
-      _addDebugLog('❌ Chyba načítání kola: $e');
+      _addDebugLog('Chyba načítání kola: $e');
     }
   }
 
@@ -347,24 +345,24 @@ class JudgingController extends StateNotifier<JudgingState> {
   Future<void> _handleStartDance(Map<String, dynamic> data) async {
     final action = data['action'] as String?;
     if (action != 'PULL_ACTIVE_STATE') {
-      _addDebugLog("⚠️ START_DANCE: neznámá akce '$action'");
+      _addDebugLog("START_DANCE: neznámá akce '$action'");
       return;
     }
 
     final disciplineUuid = state.round?.disciplineUuid;
     if (disciplineUuid == null || disciplineUuid.isEmpty) {
-      _addDebugLog('⚠️ START_DANCE: chybí disciplineUuid – přijat START_DANCE před START_ROUND?');
+      _addDebugLog('START_DANCE: chybí disciplineUuid – přijat START_DANCE před START_ROUND?');
       return;
     }
 
     state = state.copyWith(phase: JudgingPhase.loading, error: null);
-    _addDebugLog('🔄 Načítám aktivní stav: $disciplineUuid');
+    _addDebugLog('Načítám aktivní stav: $disciplineUuid');
 
     try {
       final activeState = await _api.getActiveState(disciplineUuid);
       if (!activeState.hasActiveState) {
         state = state.copyWith(phase: JudgingPhase.roundStarted);
-        _addDebugLog('⚠️ Active-state je prázdný – vracím se na seznam párů');
+        _addDebugLog('Active-state je prázdný – vracím se na seznam párů');
         return;
       }
 
@@ -380,13 +378,13 @@ class JudgingController extends StateNotifier<JudgingState> {
       final dance = activeState.currentDance;
       final votedSuffix = alreadyVoted ? ' (hodnocení již odesláno)' : '';
       _addDebugLog(
-        '✅ Tanec: ${dance?.name ?? '?'} (${dance?.shortName ?? '?'})'
+        ' Tanec: ${dance?.name ?? '?'} (${dance?.shortName ?? '?'})'
         ' – ${activeState.allRoundPairs.length} párů$votedSuffix',
       );
     } catch (e) {
       // Při chybě vrátíme do stavu kola (ne idle), aby páry zůstaly viditelné
       state = state.copyWith(phase: JudgingPhase.roundStarted, error: e.toString());
-      _addDebugLog('❌ Chyba načítání active-state: $e');
+      _addDebugLog('Chyba načítání active-state: $e');
     }
   }
 
@@ -396,7 +394,7 @@ class JudgingController extends StateNotifier<JudgingState> {
 
     // Pokud má porotce neuložené hodnocení, odešleme ho
     if (state.scores.isNotEmpty && !state.scoresSubmitted) {
-      _addDebugLog('📤 Auto-odesílám neuložené hodnocení...');
+      _addDebugLog('Auto-odesílám neuložené hodnocení...');
       submitScores();
     }
 
@@ -443,13 +441,13 @@ class JudgingController extends StateNotifier<JudgingState> {
     final activeState = state.activeState;
 
     if (round == null || activeState == null) {
-      _addDebugLog('⚠️ submitScores: chybí round nebo activeState');
+      _addDebugLog('submitScores: chybí round nebo activeState');
       return false;
     }
 
     final danceUuid = activeState.currentDance?.uuid ?? '';
     if (danceUuid.isEmpty) {
-      _addDebugLog('⚠️ submitScores: chybí dance UUID');
+      _addDebugLog('submitScores: chybí dance UUID');
       return false;
     }
 
@@ -463,7 +461,7 @@ class JudgingController extends StateNotifier<JudgingState> {
       if (target > 0 && crossCount != target) {
         final msg = 'Označte přesně $target párů (nyní: $crossCount)';
         state = state.copyWith(error: msg);
-        _addDebugLog('⚠️ Validace: $msg');
+        _addDebugLog('Validace: $msg');
         return false;
       }
     }
@@ -475,7 +473,7 @@ class JudgingController extends StateNotifier<JudgingState> {
       if (unscoredCount > 0) {
         final msg = 'Ohodnoťte všechny páry ($unscoredCount bez umístění)';
         state = state.copyWith(error: msg);
-        _addDebugLog('⚠️ Validace: $msg');
+        _addDebugLog('Validace: $msg');
         return false;
       }
       // Každé umístění musí být unikátní (safety-net, dedup je v setScore)
@@ -483,7 +481,7 @@ class JudgingController extends StateNotifier<JudgingState> {
       if (assigned.length != assigned.toSet().length) {
         const msg = 'Každé umístění musí být použito nejvýše jednou';
         state = state.copyWith(error: msg);
-        _addDebugLog('⚠️ Validace: $msg');
+        _addDebugLog('Validace: $msg');
         return false;
       }
     }
@@ -509,7 +507,7 @@ class JudgingController extends StateNotifier<JudgingState> {
         scoresSubmitted: true,
         scoresLocked: true,
       );
-      _addDebugLog('✅ Hodnocení odesláno a uzamčeno (${payload.scores.length} párů)');
+      _addDebugLog('Hodnocení odesláno a uzamčeno (${payload.scores.length} párů)');
       return true;
     } catch (e) {
       // Offline – uložíme do fronty; upsert logika na serveru zajistí bezpečnost
@@ -520,7 +518,7 @@ class JudgingController extends StateNotifier<JudgingState> {
         scoresLocked: true,
         error: 'Offline – hodnocení uloženo do fronty',
       );
-      _addDebugLog('📥 Offline: hodnocení zařazeno do fronty (${_queue.length} položek)');
+      _addDebugLog('Offline: hodnocení zařazeno do fronty (${_queue.length} položek)');
       return true;
     }
   }
@@ -537,9 +535,9 @@ class JudgingController extends StateNotifier<JudgingState> {
       try {
         await _api.submitScores(payload);
         await _queue.dequeue();
-        _addDebugLog('✅ Offline fronta: odesláno kolo ${_shortUuid(payload.roundUuid)}');
+        _addDebugLog('Offline fronta: odesláno kolo ${_shortUuid(payload.roundUuid)}');
       } catch (_) {
-        _addDebugLog('⚠️ Offline fronta: stále offline, přerušuji');
+        _addDebugLog('Offline fronta: stále offline, přerušuji');
         break;
       }
     }

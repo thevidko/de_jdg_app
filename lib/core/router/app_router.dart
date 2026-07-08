@@ -6,9 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/controllers/auth_controller.dart';
 import 'dart:async';
-// Importy tvých obrazovek (zatím placeholdery)
-// import '../../features/auth/screens/login_screen.dart';
-// import '../../features/home/screens/home_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   // Sledujeme změny v auth storu
@@ -38,8 +35,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) =>
-            const CompetitionsScreen(), // <--- Změna zde
+        builder: (context, state) => const CompetitionsScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(

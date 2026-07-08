@@ -10,7 +10,6 @@ class CentrifugoService {
   StreamSubscription<ConnectedEvent>? _connectSub;
   StreamSubscription<DisconnectedEvent>? _disconnectSub;
 
-  // Sleduje aktivní subscripce dle názvu kanálu – umožňuje bezpečné opakované subscribe.
   final Map<String, Subscription> _subscriptions = {};
 
   final ApiService _apiService;
@@ -35,7 +34,7 @@ class CentrifugoService {
     final wsToken = await _storage.read(key: 'ws_token');
 
     if (wsToken == null) {
-      const msg = "⚠️ Centrifugo: Chybí WS token, nelze se připojit.";
+      const msg = "Centrifugo: Chybí WS token, nelze se připojit.";
       print(msg);
       _updateStatus(msg);
       return;
@@ -47,59 +46,58 @@ class CentrifugoService {
         final payload = jsonDecode(
           utf8.decode(base64.decode(base64.normalize(parts[1]))),
         );
-        print("🕵️ WS Token Payload: $payload");
+        print("WS Token Payload: $payload");
         if (payload['sub'] != null) {
-          print("🆔 Token Subject (User UUID): ${payload['sub']}");
+          print("Token Subject (User UUID): ${payload['sub']}");
         }
         // Check expiration
         if (payload['exp'] != null) {
           final exp = DateTime.fromMillisecondsSinceEpoch(
             payload['exp'] * 1000,
           );
-          print("⏳ WS Token Expires: $exp (Local: ${exp.toLocal()})");
+          print("WS Token Expires: $exp (Local: ${exp.toLocal()})");
           if (exp.isBefore(DateTime.now())) {
-            print("❌ WS Token is EXPIRED!");
-            _updateStatus("⚠️ WS Token Expired. Please login again.");
+            print("WS Token is EXPIRED!");
+            _updateStatus("WS Token Expired. Please login again.");
           }
         }
       }
     } catch (e) {
-      print("⚠️ Failed to parse WS Token: $e");
+      print("Failed to parse WS Token: $e");
     }
 
     // Vždy čisté odpojení před novým připojením
     await disconnect();
 
-    print("🔄 Vytvářím nový Centrifugo Client...");
+    print("Vytvářím nový Centrifugo Client...");
     _client = createClient(_apiService.wsUrl, ClientConfig(token: wsToken));
 
     _connectSub = _client?.connected.listen((event) {
-      final msg = "✅ Centrifugo: Připojeno (Client ID: ${event.client})";
+      final msg = "Centrifugo: Připojeno (Client ID: ${event.client})";
       print(msg);
       _updateStatus(msg);
     });
 
     _disconnectSub = _client?.disconnected.listen((event) {
-      final msg = "❌ Centrifugo: Odpojeno (${event.reason})";
+      final msg = "Centrifugo: Odpojeno (${event.reason})";
       print(msg);
       _updateStatus(msg);
     });
 
     try {
-      _updateStatus("⏳ Připojuji se k Centrifugu (${_apiService.wsUrl})...");
+      _updateStatus("Připojuji se k Centrifugu (${_apiService.wsUrl})...");
       await _client?.connect();
     } catch (e) {
-      final msg = "🔥 Centrifugo Error: $e";
+      final msg = "Centrifugo Error: $e";
       print(msg);
       _updateStatus(msg);
     }
   }
 
   /// 2. Odběr kanálu (Vstup do místnosti)
-  /// Automaticky vyřeší auth pro privátní kanály (judges:...)
   Future<Subscription?> subscribe(String channel) async {
     if (_client == null) {
-      _updateStatus("⚠️ Nemohu odebírat $channel - klient není připojen.");
+      _updateStatus("Nemohu odebírat $channel - klient není připojen.");
       return null;
     }
 
@@ -108,18 +106,14 @@ class CentrifugoService {
     // Pokud je kanál privátní (začíná na "judges:"), musíme získat token z API
     if (channel.startsWith('judges:')) {
       try {
-        print("🔐 Centrifugo: Žádám o přístup do kanálu $channel...");
+        print("Centrifugo: Žádám o přístup do kanálu $channel...");
         subToken = await _getSubscriptionToken(channel);
       } catch (e) {
-        print("⛔ Centrifugo: Přístup zamítnut pro $channel. ($e)");
+        print("Centrifugo: Přístup zamítnut pro $channel. ($e)");
         return null;
       }
     }
 
-    // Pokud subscripce pro tento kanál již existuje v registru klienta, odstraníme ji.
-    // Stává se po autoDispose JudgingControlleru – unsubscribe() nestačí, musíme ji z
-    // registru klienta odebrat pomocí removeSubscription(), jinak newSubscription() hodí
-    // "Subscription to a channel already exists".
     final existing = _subscriptions[channel];
     if (existing != null) {
       try {
@@ -137,12 +131,10 @@ class CentrifugoService {
     );
     _subscriptions[channel] = subscription;
 
-    // Nastavení listenerů - Listener pro data necháme na UI vrstvě (CompetitionDetailScreen),
-    // abychom předešli chybě "Stream has already been listened to".
-    // subscription.publication.listen((event) { ... });
+
 
     subscription.join.listen((event) {
-      final msg = "👋 User joined $channel: ${event.user} (${event.client})";
+      final msg = "User joined $channel: ${event.user} (${event.client})";
       print(msg);
       _updateStatus(msg);
     });
@@ -154,13 +146,13 @@ class CentrifugoService {
     });
 
     subscription.subscribed.listen((event) {
-      final msg = "✅ Odebírám kanál $channel";
+      final msg = "Odebírám kanál $channel";
       print(msg);
       _updateStatus(msg);
     });
 
     subscription.error.listen((event) {
-      final msg = "🛑 Chyba odběru $channel: ${event.error}";
+      final msg = "Chyba odběru $channel: ${event.error}";
       print(msg);
       _updateStatus(msg);
     });
@@ -169,38 +161,30 @@ class CentrifugoService {
     return subscription;
   }
 
-  /// Pomocná metoda pro volání tvého Laravel endpointu /api/broadcasting/auth
   Future<String> _getSubscriptionToken(String channel) async {
-    // Použijeme tvůj existující ApiService (Dio)
-    // Dio automaticky přidá Bearer token (JWT) díky interceptoru, který jsme dělali minule
     try {
       final response = await _apiService.client.post(
         '/broadcasting/auth',
         data: {'channel': channel},
       );
-      print("🔑 Auth Response for $channel: ${response.data}"); // LOG RESPONSE
+      print("Auth Response for $channel: ${response.data}");
 
-      // Backend vrací { token: "..." } nebo { data: { token: "..." } } - zkontroluj dle Laravel response
-      // Laravel default broadcast auth vrací přímo JSON s klíčem 'auth' nebo 'token'.
       return response.data['token'];
     } on DioException catch (e) {
-      print("❌ Auth Request Failed: ${e.message}");
+      print("Auth Request Failed: ${e.message}");
       if (e.response != null) {
-        print("📥 Status: ${e.response?.statusCode}");
-        print("📥 Headers: ${e.response?.headers}");
-        print("📥 Data: ${e.response?.data}");
+        print("Status: ${e.response?.statusCode}");
+        print("Headers: ${e.response?.headers}");
+        print("Data: ${e.response?.data}");
       }
       rethrow;
     } catch (e) {
-      print("❌ Auth Request Failed: $e");
+      print("Auth Request Failed: $e");
       rethrow;
     }
   }
 
-  /// Odhlásí se z kanálu a odstraní subscripci z registru klienta.
-  ///
-  /// Volá se z [JudgingController.dispose()] – zajišťuje, že při příštím
-  /// otevření screeny je možné kanál znovu odebírat bez výjimky "already exists".
+
   Future<void> removeChannel(String channel) async {
     final sub = _subscriptions.remove(channel);
     if (sub == null || _client == null) return;
@@ -213,7 +197,7 @@ class CentrifugoService {
     _connectSub?.cancel();
     _disconnectSub?.cancel();
     if (_client != null) {
-      // Odebereme všechny subscripce z registru před odpojením
+
       for (final sub in _subscriptions.values) {
         try {
           _client!.removeSubscription(sub);

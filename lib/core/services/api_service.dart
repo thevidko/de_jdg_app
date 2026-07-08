@@ -34,10 +34,8 @@ class ApiService {
 
   ApiService._internal();
 
-  /// Zkontroluje dostupnost backendu přes GET /up (Laravel built-in health endpoint).
+  /// Zkontroluje dostupnost backendu přes GET /up .
   ///
-  /// Jde přímo na origin (bez /api/v1), timeout 5 s.
-  /// Vrací true pokud server odpoví 200.
   Future<bool> checkHealth() async {
     try {
       final uri = Uri.parse(_baseUrl);
@@ -72,7 +70,6 @@ class ApiService {
     _dio.options.baseUrl = _defaultBaseUrl;
   }
 
-  // Tuto metodu musíme zavolat v main.dart před spuštěním aplikace!
   Future<void> init({String? baseUrl, String? wsUrl}) async {
     if (baseUrl != null && baseUrl.isNotEmpty) _baseUrl = baseUrl;
     if (wsUrl != null && wsUrl.isNotEmpty) _wsUrl = wsUrl;
@@ -80,7 +77,6 @@ class ApiService {
     final appDocDir = await getApplicationDocumentsDirectory();
     final cookiePath = "${appDocDir.path}/.cookies/";
 
-    // Vytvoření složky, pokud neexistuje
     await Directory(cookiePath).create(recursive: true);
 
     _cookieJar = PersistCookieJar(storage: FileStorage(cookiePath));
@@ -98,7 +94,7 @@ class ApiService {
       ),
     );
 
-    // 3. Přidání Cookie Manageru (Jako první interceptor!)
+    // 3. Přidání Cookie Manageru
     _dio.interceptors.add(CookieManager(_cookieJar));
 
     _setupInterceptors();
@@ -110,7 +106,6 @@ class ApiService {
     _dio.interceptors.add(
       QueuedInterceptorsWrapper(
         onRequest: (options, handler) async {
-          // Access token stále posíláme ručně v Headeru (pokud ho máme)
           final token = await _storage.read(key: 'jwt_token');
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
@@ -159,10 +154,8 @@ class ApiService {
 
   Future<bool> _refreshToken() async {
     try {
-      print("🔄 Refreshing token via Cookie...");
+      print("Refreshing token via Cookie...");
 
-      // Separátní Dio instance se sdíleným CookieJar – CookieManager automaticky
-      // přiloží HttpOnly refresh_token cookie k požadavku.
       final refreshDio = Dio(
         BaseOptions(
           baseUrl: _baseUrl,
@@ -175,32 +168,27 @@ class ApiService {
       refreshDio.interceptors.add(CookieManager(_cookieJar));
 
       final response = await refreshDio.post('/auth/refresh');
-      print("🔄 Refresh response status: ${response.statusCode}");
-      print("🔄 Refresh response data: ${response.data}");
+      print("Refresh response status: ${response.statusCode}");
+      print("Refresh response data: ${response.data}");
 
       if (response.statusCode == 200) {
-        // Backend může vracet buď:
-        //   (A) JSON:API: { data: { attributes: { access_token: "...", ws_connection_token: "..." } } }
-        //   (B) Jednoduchý JSON: { access_token: "..." }
         String? newAccessToken;
         String? newWsToken;
 
         final data = response.data;
         if (data is Map) {
           if (data['data'] is Map && data['data']['attributes'] is Map) {
-            // Varianta A – JSON:API (stejný formát jako /auth/login)
             final attrs = data['data']['attributes'] as Map;
             newAccessToken = attrs['access_token']?.toString();
             newWsToken = attrs['ws_connection_token']?.toString();
           } else {
-            // Varianta B – jednoduchý JSON
             newAccessToken = data['access_token']?.toString();
             newWsToken = data['ws_connection_token']?.toString();
           }
         }
 
         if (newAccessToken == null || newAccessToken.isEmpty) {
-          print("❌ Refresh: access_token nebyl nalezen v odpovědi");
+          print("Refresh: access_token nebyl nalezen v odpovědi");
           return false;
         }
 
@@ -209,11 +197,11 @@ class ApiService {
           await _storage.write(key: 'ws_token', value: newWsToken);
         }
 
-        print("✅ Token obnoven");
+        print("Token obnoven");
         return true;
       }
     } catch (e) {
-      print("❌ Refresh failed: $e");
+      print("Refresh failed: $e");
     }
     return false;
   }
@@ -221,7 +209,7 @@ class ApiService {
   // ... uvnitř ApiService class
 
   Future<List<Competition>> getMyCompetitions() async {
-    print("🚀 API: Getting my competitions...");
+    print("API: Getting my competitions...");
     try {
       final response = await _dio.get(
         '/competitions',
@@ -230,23 +218,22 @@ class ApiService {
           'sort': '-dateStart',
         },
       );
-      print("✅ API: Response received: ${response.statusCode}");
-      // print("📦 Data: ${response.data}"); // Okomentováno pro přehlednost
+      print("API: Response received: ${response.statusCode}");
 
       final List<dynamic> data = response.data['data'];
-      print("📊 Parsing ${data.length} competitions");
+      print("Parsing ${data.length} competitions");
 
       return data.map((json) => Competition.fromJson(json)).toList();
     } on DioException catch (e) {
-      print("❌ API Error in getMyCompetitions: ${e.message}");
+      print("API Error in getMyCompetitions: ${e.message}");
       if (e.response != null) {
-        print("📥 Response Status: ${e.response?.statusCode}");
-        print("📥 Response Data: ${e.response?.data}");
-        print("📤 Request Headers: ${e.requestOptions.headers}");
+        print("Response Status: ${e.response?.statusCode}");
+        print("Response Data: ${e.response?.data}");
+        print("Request Headers: ${e.requestOptions.headers}");
       }
       rethrow;
     } catch (e) {
-      print("❌ Unknown Error: $e");
+      print("Unknown Error: $e");
       rethrow;
     }
   }
@@ -260,7 +247,6 @@ class ApiService {
     );
 
     // CookieManager automaticky zachytí 'Set-Cookie' s refresh tokenem
-    // a uloží ho do telefonu. My se o to nestaráme.
 
     return response.data['data']['attributes'];
   }
@@ -283,9 +269,7 @@ class ApiService {
   Future<RoundDetail> getRound(String roundUuid) async {
     final response = await _dio.get(
       '/rounds/$roundUuid',
-      queryParameters: {
-        'include': 'discipline,discipline.disciplinePairs',
-      },
+      queryParameters: {'include': 'discipline,discipline.disciplinePairs'},
     );
     return RoundDetail.fromJsonApi(response.data as Map<String, dynamic>);
   }
@@ -295,7 +279,9 @@ class ApiService {
   /// Volá se po přijetí START_DANCE eventu (action: PULL_ACTIVE_STATE)
   /// nebo při opětovném připojení (reconnect).
   Future<ActiveState> getActiveState(String disciplineUuid) async {
-    final response = await _dio.get('/disciplines/$disciplineUuid/active-state');
+    final response = await _dio.get(
+      '/disciplines/$disciplineUuid/active-state',
+    );
     return ActiveState.fromJson(response.data as Map<String, dynamic>);
   }
 
@@ -304,7 +290,9 @@ class ApiService {
   /// Formát odpovědi je identický s [getActiveState].
   /// Volá se při připojení do rozjetého kola, kdy porotce nezná UUID disciplíny.
   Future<ActiveState> getCompetitionActiveState(String competitionId) async {
-    final response = await _dio.get('/competitions/$competitionId/active-state');
+    final response = await _dio.get(
+      '/competitions/$competitionId/active-state',
+    );
     return ActiveState.fromJson(response.data as Map<String, dynamic>);
   }
 

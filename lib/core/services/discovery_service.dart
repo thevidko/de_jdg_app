@@ -102,11 +102,6 @@ class DiscoveryService {
     return found.toList();
   }
 
-  /// Ověří dostupnost backendu přes HTTP GET na /up nebo /health.
-  ///
-  /// Healthcheck jde na origin (bez /api/v1), protože /up a /health jsou
-  /// root-level Laravel routy, ne pod API prefixem.
-  /// Vrací [HealthResult] s URL, na které server odpověděl.
   Future<HealthResult> verifyBackend(String apiUrl) async {
     final origin = _origin(apiUrl);
     final client = HttpClient()
@@ -133,16 +128,12 @@ class DiscoveryService {
     }
   }
 
-  /// Extrahuje origin (scheme + host + port) z plné API URL.
-  /// 'http://192.168.10.54:8000/api/v1' → 'http://192.168.10.54:8000'
   String _origin(String url) {
     final uri = Uri.parse(url);
     final port = uri.hasPort ? ':${uri.port}' : '';
     return '${uri.scheme}://${uri.host}$port';
   }
 
-  /// Vrátí directed broadcast adresy pro všechna aktivní IPv4 rozhraní.
-  /// Předpokládá /24 (nejčastější domácí/firemní sítě).
   Future<List<InternetAddress>> _getBroadcastAddresses() async {
     final seen = <String>{};
     final result = <InternetAddress>[];
@@ -181,7 +172,6 @@ class DiscoveryService {
       }
     } catch (_) {}
 
-    // Poslední záchrana pokud oba zdroje selžou.
     if (result.isEmpty) add('255.255.255.255');
 
     return result;

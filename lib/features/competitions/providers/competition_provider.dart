@@ -6,9 +6,7 @@ import '../../../core/services/api_service.dart';
 final myCompetitionsProvider = FutureProvider.autoDispose<List<Competition>>((
   ref,
 ) async {
-  print("🔥 Provider: myCompetitionsProvider started");
-  // Zde můžeme použít ApiService.
-  // Pokud ho nemáš jako provider, použij Singleton: ApiService()
+  print("Provider: myCompetitionsProvider started");
   final api = ApiService();
   return api.getMyCompetitions();
 });

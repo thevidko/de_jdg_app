@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 /// Debug panel – zobrazí Centrifugo status a log událostí.
-///
-/// Otevírá se jako modální bottom sheet z JudgingScreen.
-/// Zachovává stejnou funkcionalitu jako původní CompetitionDetailScreen.
 class DebugPanel extends StatelessWidget {
   final String connectionStatus;
   final List<String> logEntries;
@@ -60,7 +57,11 @@ class DebugPanel extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.terminal, color: Colors.greenAccent, size: 18),
+                  const Icon(
+                    Icons.terminal,
+                    color: Colors.greenAccent,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   const Text(
                     'DEBUG LOG',

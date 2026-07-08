@@ -13,7 +13,6 @@ import '../../judging/widgets/round_ended_view.dart';
 /// Přebírá původní `CompetitionDetailScreen` (debug log) a rozšiřuje ji
 /// o plnou logiku hodnocení dle stavového automatu [JudgingController].
 ///
-/// Debug panel (původní debug log) je stále dostupný přes ikonu v AppBaru.
 class CompetitionDetailScreen extends ConsumerWidget {
   // competitionId je k dispozici pro budoucí použití (filtrování, header...)
   final String competitionId;
@@ -23,7 +22,9 @@ class CompetitionDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(judgingControllerProvider(competitionId));
-    final controller = ref.read(judgingControllerProvider(competitionId).notifier);
+    final controller = ref.read(
+      judgingControllerProvider(competitionId).notifier,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -73,17 +74,17 @@ class CompetitionDetailScreen extends ConsumerWidget {
     return switch (state.phase) {
       JudgingPhase.idle => const Text('Čekáme na kolo'),
       JudgingPhase.loading => const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 10),
-            Text('Načítám...'),
-          ],
-        ),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 10),
+          Text('Načítám...'),
+        ],
+      ),
       JudgingPhase.roundStarted => Text(getDisciplineAndRound()),
       JudgingPhase.danceActive => Text(getDisciplineAndRound()),
       JudgingPhase.roundEnded => const Text('Kolo ukončeno'),
@@ -143,7 +144,8 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOffline = message.contains('Offline') || message.contains('offline');
+    final isOffline =
+        message.contains('Offline') || message.contains('offline');
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -161,8 +163,7 @@ class _ErrorBanner extends StatelessWidget {
               message,
               style: TextStyle(
                 fontSize: 12,
-                color:
-                    isOffline ? Colors.orange.shade800 : Colors.red.shade800,
+                color: isOffline ? Colors.orange.shade800 : Colors.red.shade800,
               ),
             ),
           ),

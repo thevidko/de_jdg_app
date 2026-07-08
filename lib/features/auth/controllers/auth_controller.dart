@@ -13,13 +13,11 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
   },
 );
 
-// 1. Rozšíříme AuthState o Usera
 class AuthState {
   final bool isLoading;
   final bool isAuthenticated;
   final String? error;
-  final User? user; // <--- Přidáno
-
+  final User? user;
   AuthState({
     this.isLoading = false,
     this.isAuthenticated = false,
@@ -67,17 +65,20 @@ class AuthController extends StateNotifier<AuthState> {
       state = AuthState(
         isAuthenticated: false,
         isLoading: false,
-        error: 'Server není dostupný. Zkontrolujte Wi-Fi nebo vyberte jiný server.',
+        error:
+            'Server není dostupný. Zkontrolujte Wi-Fi nebo vyberte jiný server.',
       );
       return;
     }
 
     final cachedUser = _storage.getUser();
-    state = AuthState(isAuthenticated: true, isLoading: false, user: cachedUser);
+    state = AuthState(
+      isAuthenticated: true,
+      isLoading: false,
+      user: cachedUser,
+    );
   }
 
-  /// Voláno při návratu aplikace do popředí.
-  /// Pokud server přestal odpovídat, odhlásí uživatele.
   Future<void> checkBackendHealth() async {
     if (!state.isAuthenticated) return;
     final ok = await _api.checkHealth();
@@ -99,9 +100,7 @@ class AuthController extends StateNotifier<AuthState> {
       // 1. Získání dat z API
       final attributes = await _api.login(email, password);
 
-      // attributes obsahuje to JSON pole, co jsi poslal
       final accessToken = attributes['access_token'];
-      // final refreshToken = attributes['expires_in']; // Refresh token je nyní v HttpOnly Cookie
 
       final wsToken = attributes['ws_connection_token'];
       final userId = attributes['id'];
